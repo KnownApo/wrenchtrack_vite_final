@@ -13,14 +13,16 @@ export default function InvoiceBuilderScreen() {
   const [invoiceTitle, setInvoiceTitle] = useState('Service Invoice');
   const [poNumber, setPoNumber] = useState('');
   const [taxRate, setTaxRate] = useState(0.1);
-const [signatureURL, setSignatureURL] = useState('');
-const invoiceId = `INV-${Date.now()}`;
+  const [signatureURL, setSignatureURL] = useState('');
+  const invoiceId = `INV-${Date.now()}`;
   const [companySettings, setCompanySettings] = useState({});
+  const pdfRef = useRef();
 
   useEffect(() => {
     if (!user) return;
     const loadCompanySettings = async () => {
       const ref = doc(db, 'users', user.uid, 'settings', 'profile');
+ // ✅ Correct path
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const data = snap.data();
@@ -29,8 +31,7 @@ const invoiceId = `INV-${Date.now()}`;
       }
     };
     loadCompanySettings();
-  }, [user]); // 10%
-  const pdfRef = useRef();
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -45,11 +46,11 @@ const invoiceId = `INV-${Date.now()}`;
   }, [user]);
 
   const handleTogglePart = (part) => {
-    if (selectedParts.find(p => p.id === part.id)) {
-      setSelectedParts(prev => prev.filter(p => p.id !== part.id));
-    } else {
-      setSelectedParts(prev => [...prev, part]);
-    }
+    setSelectedParts(prev =>
+      prev.find(p => p.id === part.id)
+        ? prev.filter(p => p.id !== part.id)
+        : [...prev, part]
+    );
   };
 
   const subtotal = selectedParts.reduce((sum, part) => sum + (part.price || 0), 0);
@@ -138,70 +139,64 @@ const invoiceId = `INV-${Date.now()}`;
         <button onClick={handleDownloadPDF} className="bg-gray-600 text-white px-4 py-2 rounded">📥 Download PDF</button>
       </div>
 
-      
-        <div className="mt-10 p-6 border rounded bg-white text-sm font-sans shadow-md" ref={pdfRef}>
-          <div className="flex justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-blue-700">{invoiceTitle}</h2>
-              <p className="text-xs text-gray-500">PO: {poNumber}</p>
-              <p className="text-xs text-gray-500">Date: {new Date().toLocaleDateString()}</p>
-<p className="text-xs text-gray-500">Invoice ID: {invoiceId}</p>
-            </div>
-            <div className="text-right text-sm">
-              <p className="font-bold">WrenchTrack</p>
-              <p>123 Repair St.</p>
-              <p>support@wrenchtrack.com</p>
-            </div>
+      {/* PDF Output */}
+      <div className="mt-10 p-6 border rounded bg-white text-sm font-sans shadow-md" ref={pdfRef}>
+        <div className="flex justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-blue-700">{invoiceTitle}</h2>
+            <p className="text-xs text-gray-500">PO: {poNumber}</p>
+            <p className="text-xs text-gray-500">Date: {new Date().toLocaleDateString()}</p>
+            <p className="text-xs text-gray-500">Invoice ID: {invoiceId}</p>
           </div>
-          <hr className="mb-4"/>
-          <div className="mb-4">
-            <p className="font-semibold">Bill To:</p>
-            <p>{customers.find(c => c.id === selectedCustomer)?.name || ''}</p>
-          </div>
-          <table className="w-full mb-4 border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="border p-2">Part</th>
-                <th className="border p-2">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedParts.map(part => (
-                <tr key={part.id}>
-                  <td className="border p-2">{part.name}</td>
-                  <td className="border p-2">${part.price.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="text-right">
-            <p>Subtotal: ${subtotal.toFixed(2)}</p>
-            <p>Tax: ${tax.toFixed(2)}</p>
-            <p className="text-lg font-bold">Total: ${total.toFixed(2)}</p>
-          </div>
-          {signatureURL && (
-  <div className="mt-6">
-    <p className="font-semibold mb-1">Client Signature:</p>
-    <img src={signatureURL} alt="Client Signature" className="h-24 border" />
-  </div>
-)}
-<div className="mt-6 text-center text-xs text-gray-500">
-            <p>Thank you for your business!</p>
-            <p>Terms: Payment due upon receipt</p>
+          <div className="text-right text-sm">
+            <p className="font-bold">{companySettings?.businessInfo?.name || 'Your Company'}</p>
+            <p>{companySettings?.businessInfo?.address || 'Your Address'}</p>
+            <p>{companySettings?.businessInfo?.email || 'you@example.com'}</p>
+            <p>{companySettings?.businessInfo?.phone || '(123) 456-7890'}</p>
           </div>
         </div>
-        
-        <h2 className="text-xl font-bold">{invoiceTitle}</h2>
-        <p><strong>PO:</strong> {poNumber}</p>
-        <p><strong>Customer:</strong> {customers.find(c => c.id === selectedCustomer)?.name || ''}</p>
-        <ul className="mt-2 space-y-1">
-          {selectedParts.map(part => (
-            <li key={part.id}>{part.name} - ${part.price}</li>
-          ))}
-        </ul>
-        <p className="mt-2"><strong>Subtotal:</strong> ${subtotal.toFixed(2)}</p>
-        <p><strong>Tax:</strong> ${tax.toFixed(2)}</p>
-        <p><strong>Total:</strong> ${total.toFixed(2)}</p>
+
+        <hr className="mb-4" />
+        <div className="mb-4">
+          <p className="font-semibold">Bill To:</p>
+          <p>{customers.find(c => c.id === selectedCustomer)?.name || ''}</p>
+        </div>
+
+        <table className="w-full mb-4 border-collapse">
+          <thead>
+            <tr className="bg-gray-100 text-left">
+              <th className="border p-2">Part</th>
+              <th className="border p-2">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedParts.map(part => (
+              <tr key={part.id}>
+                <td className="border p-2">{part.name}</td>
+                <td className="border p-2">${part.price.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="text-right">
+          <p>Subtotal: ${subtotal.toFixed(2)}</p>
+          <p>Tax: ${tax.toFixed(2)}</p>
+          <p className="text-lg font-bold">Total: ${total.toFixed(2)}</p>
+        </div>
+
+        {signatureURL && (
+          <div className="mt-6">
+            <p className="font-semibold mb-1">Client Signature:</p>
+            <img src={signatureURL} alt="Client Signature" className="h-24 border" />
+          </div>
+        )}
+
+        <div className="mt-6 text-center text-xs text-gray-500">
+          <p>Thank you for your business!</p>
+          <p>Terms: {companySettings?.preferences?.invoiceTerms || 'Payment due upon receipt'}</p>
+        </div>
       </div>
+    </div>
   );
 }

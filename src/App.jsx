@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
+import AuthGuard from './components/AuthGuard.jsx';
 import HomeScreen from './screens/HomeScreen';
 import CustomersScreen from './screens/CustomersScreen';
 import JobTimerScreen from './screens/JobTimerScreen';
@@ -19,20 +19,25 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<HomeScreen />} />
-        <Route path="/dashboard" element={<DashboardScreen />} />
-        <Route path="/customers" element={<CustomersScreen />} />
-        <Route path="/history" element={<CustomerHistoryScreen />} />
-        <Route path="/job" element={<JobTimerScreen />} />
-        <Route path="/parts" element={<PartsScreen />} />
-        <Route path="/invoice" element={<InvoiceBuilderScreen />} />
-        <Route path="/invoices" element={<InvoiceHistoryScreen />} />
-        <Route path="/signature" element={<SignatureScreen />} />
-        <Route path="/payment" element={<PaymentScreen />} />
-        <Route path="/settings" element={<SettingsScreen />} />
+        {/* Public Routes */}
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/register" element={<RegisterScreen />} />
+
+        {/* Protected Routes */}
+        <Route path="/" element={<AuthGuard><HomeScreen /></AuthGuard>} />
+        <Route path="/dashboard" element={<AuthGuard><DashboardScreen /></AuthGuard>} />
+        <Route path="/customers" element={<AuthGuard><CustomersScreen /></AuthGuard>} />
+        <Route path="/history" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
+        <Route path="/job" element={<AuthGuard><JobTimerScreen /></AuthGuard>} />
+        <Route path="/parts" element={<AuthGuard><PartsScreen /></AuthGuard>} />
+        <Route path="/invoice" element={<AuthGuard><InvoiceBuilderScreen /></AuthGuard>} />
+        <Route path="/invoices" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
+        <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
+        <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
+        <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
       </Routes>
+      
     </Router>
   );
 }
+

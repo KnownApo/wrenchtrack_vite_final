@@ -14,6 +14,7 @@ export default function HomeScreen() {
           { to: '/invoice', label: 'Invoices', desc: 'Generate PDF invoices' },
           { to: '/signature', label: 'Signatures', desc: 'Capture approval' },
           { to: '/payment', label: 'Payments', desc: 'Mark jobs as paid' },
+          { to: '/settings', label: 'Settings', desc: 'Manage settings' },
         ].map(link => (
           <Link key={link.to} to={link.to} className="block bg-white border border-gray-200 rounded-lg p-6 shadow hover:shadow-md transition text-left">
             <h2 className="text-lg font-semibold text-blue-700 mb-1">{link.label}</h2>
