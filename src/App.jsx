@@ -31,7 +31,7 @@ export default function App() {
         <Route path="/job" element={<AuthGuard><JobTimerScreen /></AuthGuard>} />
         <Route path="/parts" element={<AuthGuard><PartsScreen /></AuthGuard>} />
         <Route path="/invoice" element={<AuthGuard><InvoiceBuilderScreen /></AuthGuard>} />
-        <Route path="/invoices" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
+        <Route path="/invoicehistory" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
         <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
         <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
         <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
