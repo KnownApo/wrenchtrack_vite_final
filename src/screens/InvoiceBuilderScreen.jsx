@@ -20,6 +20,8 @@ export default function InvoiceBuilderScreen() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]); // Default to today's date
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [savedInvoices, setSavedInvoices] = useState([]);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
   const pdfRef = useRef();
 
   useEffect(() => {
@@ -45,6 +47,19 @@ export default function InvoiceBuilderScreen() {
 
     loadSettings();
     loadData();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchSavedInvoices = async () => {
+      const invoicesRef = collection(db, 'users', user.uid, 'invoices');
+      const snapshot = await getDocs(invoicesRef);
+      const invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSavedInvoices(invoices);
+    };
+
+    fetchSavedInvoices();
   }, [user]);
 
   const addNewPart = async () => {
@@ -217,12 +232,58 @@ export default function InvoiceBuilderScreen() {
       });
   };
 
+  const loadInvoice = async () => {
+    if (!selectedInvoiceId) return;
+
+    const invoiceRef = doc(db, 'users', user.uid, 'invoices', selectedInvoiceId);
+    const invoiceSnap = await getDoc(invoiceRef);
+
+    if (invoiceSnap.exists()) {
+      const invoiceData = invoiceSnap.data();
+      setInvoiceTitle(invoiceData.title || '');
+      setPoNumber(invoiceData.po || '');
+      setSelectedCustomer(invoiceData.customer?.id || '');
+      setSelectedParts(invoiceData.parts || []);
+      setInvoiceDate(invoiceData.invoiceDate || new Date().toISOString().split('T')[0]);
+      setDueDate(invoiceData.dueDate || '');
+      setNotes(invoiceData.notes || '');
+      alert('✅ Invoice loaded successfully.');
+    } else {
+      alert('❌ Invoice not found.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-6">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-10 text-center">
           Invoice Builder
         </h1>
+
+        {/* Load Saved Invoice */}
+        <div className="bg-gray-100 shadow-neumorphic rounded-3xl p-6 mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Load Saved Invoice</h2>
+          <div className="flex gap-4">
+            <select
+              value={selectedInvoiceId}
+              onChange={e => setSelectedInvoiceId(e.target.value)}
+              className="border border-gray-300 rounded-lg p-3 flex-1 focus:ring focus:ring-blue-300"
+            >
+              <option value="">-- Select an Invoice --</option>
+              {savedInvoices.map(invoice => (
+                <option key={invoice.id} value={invoice.id}>
+                  {invoice.title} (PO: {invoice.po})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={loadInvoice}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              Load
+            </button>
+          </div>
+        </div>
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
