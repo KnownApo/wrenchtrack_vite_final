@@ -12,7 +12,24 @@ export default function InvoiceBuilderScreen() {
   const [selectedParts, setSelectedParts] = useState([]);
   const [invoiceTitle, setInvoiceTitle] = useState('Service Invoice');
   const [poNumber, setPoNumber] = useState('');
-  const [taxRate, setTaxRate] = useState(0.1); // 10%
+  const [taxRate, setTaxRate] = useState(0.1);
+const [signatureURL, setSignatureURL] = useState('');
+const invoiceId = `INV-${Date.now()}`;
+  const [companySettings, setCompanySettings] = useState({});
+
+  useEffect(() => {
+    if (!user) return;
+    const loadCompanySettings = async () => {
+      const ref = doc(db, 'users', user.uid, 'settings', 'profile');
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = snap.data();
+        setCompanySettings(data);
+        if (data.taxRate !== undefined) setTaxRate(data.taxRate);
+      }
+    };
+    loadCompanySettings();
+  }, [user]); // 10%
   const pdfRef = useRef();
 
   useEffect(() => {
@@ -128,6 +145,7 @@ export default function InvoiceBuilderScreen() {
               <h2 className="text-xl font-bold text-blue-700">{invoiceTitle}</h2>
               <p className="text-xs text-gray-500">PO: {poNumber}</p>
               <p className="text-xs text-gray-500">Date: {new Date().toLocaleDateString()}</p>
+<p className="text-xs text-gray-500">Invoice ID: {invoiceId}</p>
             </div>
             <div className="text-right text-sm">
               <p className="font-bold">WrenchTrack</p>
@@ -161,7 +179,13 @@ export default function InvoiceBuilderScreen() {
             <p>Tax: ${tax.toFixed(2)}</p>
             <p className="text-lg font-bold">Total: ${total.toFixed(2)}</p>
           </div>
-          <div className="mt-6 text-center text-xs text-gray-500">
+          {signatureURL && (
+  <div className="mt-6">
+    <p className="font-semibold mb-1">Client Signature:</p>
+    <img src={signatureURL} alt="Client Signature" className="h-24 border" />
+  </div>
+)}
+<div className="mt-6 text-center text-xs text-gray-500">
             <p>Thank you for your business!</p>
             <p>Terms: Payment due upon receipt</p>
           </div>

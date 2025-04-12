@@ -1,42 +1,37 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import ToastSetup from './components/ToastSetup';
-import AuthGuard from './components/AuthGuard';
 
-import LoginScreen from './screens/LoginScreen';
-import RegisterScreen from './screens/RegisterScreen';
-
-import DashboardScreen from './screens/DashboardScreen';
+import HomeScreen from './screens/HomeScreen';
 import CustomersScreen from './screens/CustomersScreen';
-import CustomerHistoryScreen from './screens/CustomerHistoryScreen';
-import PartsScreen from './screens/PartsScreen';
 import JobTimerScreen from './screens/JobTimerScreen';
+import PartsScreen from './screens/PartsScreen';
 import InvoiceBuilderScreen from './screens/InvoiceBuilderScreen';
-import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
 import SignatureScreen from './screens/SignatureScreen';
 import PaymentScreen from './screens/PaymentScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
+import CustomerHistoryScreen from './screens/CustomerHistoryScreen';
+import DashboardScreen from './screens/DashboardScreen';
+import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
 
 export default function App() {
   return (
     <Router>
-      <ToastSetup />
       <Routes>
-        {/* Public Routes */}
+        <Route path="/" element={<HomeScreen />} />
+        <Route path="/dashboard" element={<DashboardScreen />} />
+        <Route path="/customers" element={<CustomersScreen />} />
+        <Route path="/history" element={<CustomerHistoryScreen />} />
+        <Route path="/job" element={<JobTimerScreen />} />
+        <Route path="/parts" element={<PartsScreen />} />
+        <Route path="/invoice" element={<InvoiceBuilderScreen />} />
+        <Route path="/invoices" element={<InvoiceHistoryScreen />} />
+        <Route path="/signature" element={<SignatureScreen />} />
+        <Route path="/payment" element={<PaymentScreen />} />
+        <Route path="/settings" element={<SettingsScreen />} />
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/register" element={<RegisterScreen />} />
-
-        {/* Protected Routes */}
-        <Route path="/" element={<AuthGuard><DashboardScreen /></AuthGuard>} />
-        <Route path="/customers" element={<AuthGuard><CustomersScreen /></AuthGuard>} />
-        <Route path="/history" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
-        <Route path="/parts" element={<AuthGuard><PartsScreen /></AuthGuard>} />
-        <Route path="/job" element={<AuthGuard><JobTimerScreen /></AuthGuard>} />
-        <Route path="/invoice" element={<AuthGuard><InvoiceBuilderScreen /></AuthGuard>} />
-        <Route path="/invoices" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
-        <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
-        <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
-        <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
       </Routes>
     </Router>
   );
