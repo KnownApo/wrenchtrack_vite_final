@@ -35,6 +35,7 @@ export default function App() {
         <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
         <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
         <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
+        <Route path="/customerhistory" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
       </Routes>
       
     </Router>

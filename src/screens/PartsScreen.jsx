@@ -2,8 +2,11 @@ import React, { useState, useContext, useEffect } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
 import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useNavigate } from 'react-router-dom';
 
 export default function PartsScreen() {
+  const navigate = useNavigate(); // Add navigation hook
+  const { parts = [], setParts } = useContext(JobLogContext); // Fallback to an empty array if parts is undefined
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('');
@@ -13,13 +16,13 @@ export default function PartsScreen() {
   const [editingIndex, setEditingIndex] = useState(null);
   const [editData, setEditData] = useState({ name: '', price: '', category: '', stock: '' });
   const [catalogParts, setCatalogParts] = useState([]); // Parts catalog for the invoice screen
-  const { parts, setParts } = useContext(JobLogContext);
+  
 
   useEffect(() => {
     const fetchCatalogParts = async () => {
       const partsRef = collection(db, 'users', 'partsCatalog');
       const snapshot = await getDocs(partsRef);
-      const fetchedParts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const fetchedParts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setCatalogParts(fetchedParts);
     };
 
@@ -82,6 +85,16 @@ export default function PartsScreen() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
+      {/* Home Button */}
+      <div className="mb-6">
+        <button
+          onClick={() => navigate('/')}
+          className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+        >
+          ← Back to Home
+        </button>
+      </div>
+
       <h2 className="text-3xl font-bold mb-6 text-blue-800">🔧 Parts Management</h2>
 
       {/* Add Part to Catalog Section */}

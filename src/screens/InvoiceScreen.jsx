@@ -1,77 +1,133 @@
-import React, { useContext, useRef } from 'react';
+import React, { useContext, useState } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
-import html2pdf from 'html2pdf.js';
+import { collection, addDoc } from 'firebase/firestore';
+import db from '../firebase/firebaseConfig';
 
 export default function InvoiceScreen() {
-  const { customer, jobDuration, parts, paid, signature } = useContext(JobLogContext);
-  const pdfRef = useRef();
+  const { signature, invoice, setInvoice, clearInvoice } = useContext(JobLogContext);
+  const [parts, setParts] = useState([]); // Manage parts locally for the invoice
+  const [newPart, setNewPart] = useState({ name: '', cost: '' }); // Manage new part input
 
-  const downloadPDF = () => {
-    html2pdf().from(pdfRef.current).save(`invoice-${Date.now()}.pdf`);
+  const handleAddPart = () => {
+    if (!newPart.name || !newPart.cost) {
+      alert('Please provide both part name and cost.');
+      return;
+    }
+    setParts([...parts, newPart]); // Add the new part to the local parts array
+    setNewPart({ name: '', cost: '' }); // Reset the input fields
   };
 
-  const today = new Date().toLocaleDateString();
-  const invoiceNumber = 'INV-' + Math.floor(1000 + Math.random() * 9000);
-  const total = parts.reduce((sum, p) => sum + p.price, 0);
+  const handleRemovePart = (index) => {
+    const updatedParts = parts.filter((_, i) => i !== index);
+    setParts(updatedParts); // Remove part from the local parts array
+  };
+
+  const saveInvoice = async () => {
+    if (!signature) {
+      alert('Please capture a signature before saving the invoice.');
+      return;
+    }
+
+    const invoiceData = {
+      parts, // Save only the parts added to the invoice
+      signature,
+      preview: document.getElementById('invoice-preview').outerHTML,
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, 'invoices'), invoiceData);
+      setInvoice(invoiceData);
+      alert(`Invoice saved to Firestore with ID: ${docRef.id}`);
+    } catch (error) {
+      console.error('Error saving invoice to Firestore:', error);
+      alert('Failed to save invoice. Please try again.');
+    }
+  };
+
+  const printInvoice = () => {
+    if (window.confirm('Are you sure you want to print the invoice? This will clear it from local storage.')) {
+      window.print();
+      clearInvoice();
+      alert('Invoice printed and cleared from local storage.');
+    }
+  };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h2 className="text-3xl font-bold mb-4 text-center text-blue-700">Invoice</h2>
-      <div ref={pdfRef} className="bg-white shadow-lg rounded-lg p-6 text-sm space-y-4">
-        <header className="border-b pb-4 mb-4">
-          <h1 className="text-2xl font-bold text-blue-600">WrenchTrack Mechanics</h1>
-          <p className="text-gray-600">123 Repair Lane, Motor City, USA</p>
-          <p className="text-gray-600">support@wrenchtrack.com</p>
-        </header>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p><strong>Invoice #:</strong> {invoiceNumber}</p>
-            <p><strong>Date:</strong> {today}</p>
-            <p><strong>Status:</strong> {paid ? 'Paid' : 'Unpaid'}</p>
-          </div>
-          <div>
-            <p><strong>Customer:</strong> {customer || 'N/A'}</p>
-            <p><strong>Job Duration:</strong> {Math.floor(jobDuration / 60)} min {jobDuration % 60} sec</p>
+    <div className="p-6 max-w-2xl mx-auto bg-white shadow-md rounded-lg">
+      <h2 className="text-3xl font-bold text-center mb-6">Invoice</h2>
+      <div id="invoice-preview" className="border rounded-lg p-4 bg-gray-50 shadow-sm">
+        {/* Parts Section */}
+        <div className="mb-4">
+          <h3 className="text-lg font-medium">Parts Used:</h3>
+          <ul className="list-disc pl-5">
+            {parts.map((part, index) => (
+              <li key={index} className="flex justify-between items-center">
+                <span>{part.name} - ${part.cost}</span>
+                <button
+                  onClick={() => handleRemovePart(index)}
+                  className="text-red-500 hover:underline"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-col sm:flex-row items-center mt-4 space-y-2 sm:space-y-0 sm:space-x-2">
+            <input
+              type="text"
+              placeholder="Part Name"
+              value={newPart.name}
+              onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+              className="border rounded px-2 py-1 w-full sm:w-auto"
+            />
+            <input
+              type="number"
+              placeholder="Cost"
+              value={newPart.cost}
+              onChange={(e) => setNewPart({ ...newPart, cost: e.target.value })}
+              className="border rounded px-2 py-1 w-full sm:w-auto"
+            />
+            <button
+              onClick={handleAddPart}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded w-full sm:w-auto"
+            >
+              Add Part
+            </button>
           </div>
         </div>
-        <div>
-          <h3 className="text-lg font-semibold mb-2">Parts Used</h3>
-          <table className="w-full border text-left text-sm">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Part</th>
-                <th className="border p-2">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parts.map((part, i) => (
-                <tr key={i}>
-                  <td className="border p-2">{part.name}</td>
-                  <td className="border p-2">${part.price.toFixed(2)}</td>
-                </tr>
-              ))}
-              <tr className="font-bold">
-                <td className="border p-2">Total</td>
-                <td className="border p-2">${total.toFixed(2)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        {signature && (
-          <div>
-            <p className="font-semibold mt-4">Client Signature</p>
-            <img src={signature} alt="Signature" className="border w-48 mt-1" />
+        {/* Signature Section */}
+        {signature ? (
+          <div className="mt-4">
+            <h3 className="text-lg font-medium">Customer Signature:</h3>
+            <img src={signature} alt="Customer Signature" className="border rounded shadow mt-2" />
           </div>
+        ) : (
+          <p className="text-red-500 mt-4">No signature available. Please capture a signature.</p>
         )}
-        <footer className="pt-4 mt-4 border-t text-xs text-gray-500">
-          Thank you for choosing WrenchTrack. Payment due upon receipt unless otherwise agreed.
-        </footer>
       </div>
-      <div className="text-center mt-6">
-        <button onClick={downloadPDF} className="bg-blue-600 text-white px-6 py-2 rounded shadow hover:bg-blue-700">
-          Download PDF
+      <div className="flex space-x-4 mt-6">
+        <button
+          onClick={saveInvoice}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow-md"
+        >
+          Save Invoice
+        </button>
+        <button
+          onClick={printInvoice}
+          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow-md"
+        >
+          Print Invoice
         </button>
       </div>
+      {invoice && (
+        <div className="mt-8">
+          <h3 className="text-lg font-medium">Saved Invoice Preview:</h3>
+          <div
+            dangerouslySetInnerHTML={{ __html: invoice.preview }}
+            className="border rounded shadow mt-2 p-4 bg-gray-100"
+          ></div>
+        </div>
+      )}
     </div>
   );
 }

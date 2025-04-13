@@ -1,8 +1,9 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function CustomersScreen() {
   const [input, setInput] = useState('');
@@ -12,22 +13,33 @@ export default function CustomersScreen() {
   const [company, setCompany] = useState('');
   const [notes, setNotes] = useState('');
   const [preferredContact, setPreferredContact] = useState('email');
-  const [customerHistory, setCustomerHistory] = useState([]);
+  const [searchQuery, setSearchQuery] = useState(''); // New state for search
+  const [filteredCustomers, setFilteredCustomers] = useState([]); // New state for filtered customers
   const { setCustomer, customer } = useContext(JobLogContext);
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) return;
 
-    const fetchCustomerHistory = async () => {
+    const fetchCustomers = async () => {
       const customersRef = collection(db, 'users', user.uid, 'customers');
       const snapshot = await getDocs(customersRef);
-      const history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCustomerHistory(history);
+      const customers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setFilteredCustomers(customers); // Initialize filtered customers
     };
 
-    fetchCustomerHistory();
+    fetchCustomers();
   }, [user]);
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    setFilteredCustomers((prev) =>
+      prev.filter((customer) =>
+        customer.name.toLowerCase().includes(query.toLowerCase())
+      )
+    );
+  };
 
   const saveCustomer = async () => {
     if (!input.trim()) return;
@@ -47,7 +59,6 @@ export default function CustomersScreen() {
         createdAt: new Date(),
       };
       await addDoc(customersRef, newCustomer);
-      setCustomerHistory(prev => [...prev, newCustomer]);
     }
 
     setInput('');
@@ -59,121 +70,122 @@ export default function CustomersScreen() {
     setPreferredContact('email');
   };
 
-  const editCustomer = async (id, updatedData) => {
-    if (!user) return;
-
-    const customerRef = doc(db, 'users', user.uid, 'customers', id);
-    await updateDoc(customerRef, updatedData);
-
-    setCustomerHistory(prev =>
-      prev.map(cust => (cust.id === id ? { ...cust, ...updatedData } : cust))
-    );
-  };
-
-  const deleteCustomer = async (id) => {
-    if (!user) return;
-
-    const customerRef = doc(db, 'users', user.uid, 'customers', id);
-    await deleteDoc(customerRef);
-
-    setCustomerHistory(prev => prev.filter(cust => cust.id !== id));
-  };
-
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4">Add Customer</h2>
-      <input
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        placeholder="Enter customer name"
-        className="border p-2 w-full rounded mb-4"
-      />
-      <input
-        value={email}
-        onChange={e => setEmail(e.target.value)}
-        placeholder="Enter customer email"
-        className="border p-2 w-full rounded mb-4"
-      />
-      <input
-        value={phone}
-        onChange={e => setPhone(e.target.value)}
-        placeholder="Enter customer phone"
-        className="border p-2 w-full rounded mb-4"
-      />
-      <textarea
-        value={address}
-        onChange={e => setAddress(e.target.value)}
-        placeholder="Enter customer address"
-        className="border p-2 w-full rounded mb-4"
-      />
-      <input
-        value={company}
-        onChange={e => setCompany(e.target.value)}
-        placeholder="Enter company name"
-        className="border p-2 w-full rounded mb-4"
-      />
-      <textarea
-        value={notes}
-        onChange={e => setNotes(e.target.value)}
-        placeholder="Enter additional notes"
-        className="border p-2 w-full rounded mb-4"
-      />
-      <div className="mb-4">
-        <label className="block font-medium mb-2">Preferred Contact Method</label>
-        <select
-          value={preferredContact}
-          onChange={e => setPreferredContact(e.target.value)}
-          className="border p-2 w-full rounded"
-        >
-          <option value="email">Email</option>
-          <option value="phone">Phone</option>
-        </select>
-      </div>
-      <button onClick={saveCustomer} className="bg-blue-500 text-white px-4 py-2 rounded">
-        Save Customer
-      </button>
-      {customer && <p className="mt-4 text-green-600">Selected: {customer}</p>}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-10">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-12">
+          👥 Manage Customers
+        </h1>
 
-      <div className="mt-8">
-        <h3 className="text-xl font-semibold mb-4">Customer History</h3>
-        {customerHistory.length === 0 ? (
-          <p className="text-gray-500">No customer history available.</p>
-        ) : (
-          <ul className="divide-y divide-gray-200">
-            {customerHistory.map((cust, index) => (
-              <li key={index} className="py-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-medium">{cust.name}</div>
-                    <div className="text-sm text-gray-500">Email: {cust.email || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">Phone: {cust.phone || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">Address: {cust.address || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">Company: {cust.company || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">Notes: {cust.notes || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">Preferred Contact: {cust.preferredContact || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">
-                      Added on: {new Date(cust.createdAt?.seconds * 1000 || cust.createdAt).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => editCustomer(cust.id, { name: 'Updated Name' })} // Example edit
-                      className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteCustomer(cust.id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-                    >
-                      Delete
-                    </button>
-                  </div>
+        {/* Search Bar */}
+        <div className="bg-white shadow-lg rounded-3xl p-6 mb-10">
+          <h2 className="text-3xl font-bold text-gray-800 mb-4">🔍 Search Customers</h2>
+          <input
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Search by customer name"
+            className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+          />
+        </div>
+
+        {/* Add Customer Section */}
+        <div className="bg-white shadow-lg rounded-3xl p-8 mb-10">
+          <h2 className="text-3xl font-bold text-gray-800 mb-6">➕ Add a New Customer</h2>
+          <div className="space-y-4">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Enter customer name"
+              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+            />
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter customer email"
+              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+            />
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Enter customer phone"
+              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+            />
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Enter customer address"
+              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+            ></textarea>
+            <input
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Enter company name"
+              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+            />
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Enter additional notes"
+              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+            ></textarea>
+            <div>
+              <label className="block font-medium mb-2">Preferred Contact Method</label>
+              <select
+                value={preferredContact}
+                onChange={(e) => setPreferredContact(e.target.value)}
+                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300 w-full"
+              >
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={saveCustomer}
+            className="mt-6 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition"
+          >
+            Save Customer
+          </button>
+          {customer && <p className="mt-4 text-green-600">Selected: {customer}</p>}
+        </div>
+
+        {/* Quick Actions Section */}
+        <div className="bg-white shadow-lg rounded-3xl p-8 mb-10">
+          <h2 className="text-3xl font-bold text-gray-800 mb-6">⚡ Quick Actions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {filteredCustomers.map((cust) => (
+              <div key={cust.id} className="bg-gray-100 p-6 rounded-lg shadow hover:shadow-lg transition">
+                <h3 className="text-xl font-bold text-blue-700">{cust.name}</h3>
+                <p className="text-sm text-gray-500">Email: {cust.email || 'N/A'}</p>
+                <p className="text-sm text-gray-500">Phone: {cust.phone || 'N/A'}</p>
+                <div className="flex gap-4 mt-4">
+                  <button
+                    onClick={() => window.open(`mailto:${cust.email}`, '_blank')}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
+                  >
+                    Email
+                  </button>
+                  <button
+                    onClick={() => window.open(`tel:${cust.phone}`, '_blank')}
+                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
+                  >
+                    Call
+                  </button>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
-        )}
+          </div>
+        </div>
+
+        {/* Navigation to Customer History */}
+        <div className="text-center">
+          <button
+            onClick={() => navigate('/customerhistory')}
+            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+          >
+            View Customer History
+          </button>
+        </div>
       </div>
     </div>
   );

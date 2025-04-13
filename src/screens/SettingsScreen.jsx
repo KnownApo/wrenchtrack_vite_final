@@ -5,7 +5,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 export default function SettingsScreen() {
   const [theme, setTheme] = useState('light');
   const [businessInfo, setBusinessInfo] = useState({ name: '', address: '', phone: '', email: '' });
-  const [preferences, setPreferences] = useState({ currency: 'USD', invoiceTerms: 'Net 30' });
+  const [preferences, setPreferences] = useState({ currency: 'USD', invoiceTerms: 'Net 30', defaultInvoiceTitle: 'Service Invoice' });
   const [loading, setLoading] = useState(false);
 
   const user = auth.currentUser;
@@ -19,7 +19,7 @@ export default function SettingsScreen() {
         const data = docSnap.data();
         setTheme(data.theme || 'light');
         setBusinessInfo(data.businessInfo || {});
-        setPreferences(data.preferences || {});
+        setPreferences(data.preferences || { currency: 'USD', invoiceTerms: 'Net 30', defaultInvoiceTitle: 'Service Invoice' });
       }
     };
     fetchSettings();
@@ -85,6 +85,13 @@ export default function SettingsScreen() {
             name="invoiceTerms"
             placeholder="Invoice Terms"
             value={preferences.invoiceTerms}
+            onChange={e => handleChange(e, 'preferences')}
+            className="w-full border p-2 mb-3 rounded"
+          />
+          <input
+            name="defaultInvoiceTitle"
+            placeholder="Default Invoice Title"
+            value={preferences.defaultInvoiceTitle}
             onChange={e => handleChange(e, 'preferences')}
             className="w-full border p-2 rounded"
           />

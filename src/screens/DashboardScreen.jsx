@@ -35,29 +35,33 @@ export default function DashboardScreen() {
   }, [user]);
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-3xl font-bold text-blue-600">📊 Invoice Analytics</h1>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-10">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-12">
+          📊 Invoice Analytics
+        </h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <h2 className="text-lg font-semibold text-gray-700">Total Invoices</h2>
-          <p className="text-4xl font-bold text-blue-700">{stats.totalInvoices}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <h2 className="text-lg font-semibold text-gray-700">Total Billed</h2>
-          <p className="text-4xl font-bold text-green-600">${stats.totalBilled.toFixed(2)}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <h2 className="text-lg font-semibold text-gray-700">Average Invoice</h2>
-          <p className="text-4xl font-bold text-yellow-500">${stats.averageInvoice.toFixed(2)}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <h2 className="text-lg font-semibold text-gray-700">Highest Invoice</h2>
-          <p className="text-4xl font-bold text-purple-600">${stats.highestInvoice.toFixed(2)}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <h2 className="text-lg font-semibold text-gray-700">Lowest Invoice</h2>
-          <p className="text-4xl font-bold text-red-600">${stats.lowestInvoice.toFixed(2)}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="bg-white rounded-3xl shadow-lg p-8 text-center hover:shadow-xl transition transform hover:-translate-y-1">
+            <h2 className="text-lg font-semibold text-gray-700">Total Invoices</h2>
+            <p className="text-5xl font-bold text-blue-700">{stats.totalInvoices}</p>
+          </div>
+          <div className="bg-white rounded-3xl shadow-lg p-8 text-center hover:shadow-xl transition transform hover:-translate-y-1">
+            <h2 className="text-lg font-semibold text-gray-700">Total Billed</h2>
+            <p className="text-5xl font-bold text-green-600">${stats.totalBilled.toFixed(2)}</p>
+          </div>
+          <div className="bg-white rounded-3xl shadow-lg p-8 text-center hover:shadow-xl transition transform hover:-translate-y-1">
+            <h2 className="text-lg font-semibold text-gray-700">Average Invoice</h2>
+            <p className="text-5xl font-bold text-yellow-500">${stats.averageInvoice.toFixed(2)}</p>
+          </div>
+          <div className="bg-white rounded-3xl shadow-lg p-8 text-center hover:shadow-xl transition transform hover:-translate-y-1">
+            <h2 className="text-lg font-semibold text-gray-700">Highest Invoice</h2>
+            <p className="text-5xl font-bold text-purple-600">${stats.highestInvoice.toFixed(2)}</p>
+          </div>
+          <div className="bg-white rounded-3xl shadow-lg p-8 text-center hover:shadow-xl transition transform hover:-translate-y-1">
+            <h2 className="text-lg font-semibold text-gray-700">Lowest Invoice</h2>
+            <p className="text-5xl font-bold text-red-600">${stats.lowestInvoice.toFixed(2)}</p>
+          </div>
         </div>
       </div>
     </div>

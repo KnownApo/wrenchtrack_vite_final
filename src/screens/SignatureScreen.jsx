@@ -1,32 +1,97 @@
-import React, { useRef, useContext } from 'react';
-import SignatureCanvas from 'react-signature-canvas';
-import { JobLogContext } from '../context/JobLogContext';
+import React, { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
+import { doc, setDoc } from 'firebase/firestore'; // Use setDoc to create or update the document
+import { db } from '../firebase';
 
 export default function SignatureScreen() {
-  const padRef = useRef();
-  const { setSignature } = useContext(JobLogContext);
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const saveSignature = () => {
-    if (!padRef.current.isEmpty()) {
-      const dataUrl = padRef.current.toDataURL();
-      setSignature(dataUrl);
-      alert('Signature saved!');
-    } else {
-      alert('Please sign before saving.');
+  const startDrawing = (e) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const handleSaveSignature = async () => {
+    const canvas = canvasRef.current;
+    const signatureURL = canvas.toDataURL('image/png');
+
+    try {
+      if (!user) {
+        alert('User is not authenticated.');
+        return;
+      }
+
+      const userSettingsRef = doc(db, 'users', user.uid, 'settings', 'signature'); // Correct document reference
+      await setDoc(userSettingsRef, { signatureURL }, { merge: true }); // Merge to avoid overwriting other fields
+      alert('✅ Signature saved successfully.');
+      navigate('/invoice'); // Navigate back to the Invoice Builder screen
+    } catch (error) {
+      console.error('Error saving signature:', error);
+      alert('❌ Failed to save signature.');
     }
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-4">Signature Capture</h2>
-      <SignatureCanvas
-        ref={padRef}
-        penColor="black"
-        canvasProps={{ width: 500, height: 200, className: 'border rounded shadow' }}
-      />
-      <div className="mt-4 space-x-2">
-        <button onClick={() => padRef.current.clear()} className="bg-red-500 text-white px-4 py-2 rounded">Clear</button>
-        <button onClick={saveSignature} className="bg-green-500 text-white px-4 py-2 rounded">Save</button>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Back to Invoice Builder Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => navigate('/invoice')}
+            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+          >
+            ← Back to Invoice Builder
+          </button>
+        </div>
+
+        <h1 className="text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-12">
+          ✍️ Capture Signature
+        </h1>
+        <div className="bg-white shadow-lg rounded-3xl p-8">
+          <canvas
+            ref={canvasRef}
+            width={600}
+            height={300}
+            className="border rounded-lg shadow-md w-full"
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+          ></canvas>
+          <div className="flex justify-center gap-6 mt-6">
+            <button
+              onClick={handleSaveSignature}
+              className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-green-600 transition"
+            >
+              Save Signature
+            </button>
+            <button
+              onClick={() => navigate('/invoice')}
+              className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
