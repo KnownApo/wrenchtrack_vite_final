@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import html2pdf from 'html2pdf.js';
 import { toast } from 'react-toastify';
+import LaborGuideSearch from '../components/LaborGuideSearch';
 
 export default function InvoiceBuilderScreen() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function InvoiceBuilderScreen() {
   const [error, setError] = useState(null);
   const pdfRef = useRef();
   const [newPart, setNewPart] = useState({ name: '', price: '' }); // Add this line
+  const [showLaborGuide, setShowLaborGuide] = useState(false);
 
   // Combined state for invoice data
   const [invoiceData, setInvoiceData] = useState({
@@ -26,7 +28,7 @@ export default function InvoiceBuilderScreen() {
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
     notes: '',
-    signatureURL: ''
+    invoiceId: `INV-${Date.now()}-${Math.floor(100000 + Math.random() * 900000)}`
   });
 
   // Cache state
@@ -152,14 +154,6 @@ export default function InvoiceBuilderScreen() {
       });
   };
 
-  // Load signature from storage
-  useEffect(() => {
-    const savedSignature = sessionStorage.getItem('signatureURL');
-    if (savedSignature) {
-      updateInvoiceData('signatureURL', savedSignature);
-    }
-  }, []);
-
   // Load draft invoice if exists
   useEffect(() => {
     const draftInvoice = sessionStorage.getItem('draftInvoice');
@@ -182,31 +176,48 @@ export default function InvoiceBuilderScreen() {
     };
   }, []);
 
+  // Add autosave feature
+  useEffect(() => {
+    // Don't save if it's the initial load
+    if (!isLoading && invoiceData) {
+      sessionStorage.setItem('currentInvoice', JSON.stringify(invoiceData));
+    }
+  }, [invoiceData, isLoading]);
+
+  // Load saved state on initial load
+  useEffect(() => {
+    const savedInvoice = sessionStorage.getItem('currentInvoice');
+    if (savedInvoice && !isLoading) {
+      try {
+        const parsed = JSON.parse(savedInvoice);
+        setInvoiceData(prev => ({ ...prev, ...parsed }));
+      } catch (err) {
+        console.error('Error loading saved invoice:', err);
+      }
+    }
+  }, [isLoading]);
+
   // Update handleSaveInvoice
   const handleSaveInvoice = async () => {
     if (!validateCurrentStep()) return;
-    if (!invoiceData.signatureURL) {
-      toast.error('Please add a signature before saving');
-      return;
-    }
 
     setIsLoading(true);
     try {
       const customerData = customers.find(c => c.id === invoiceData.customer);
+      const randomDigits = Math.floor(100 + Math.random() * 900);
       const invoiceToSave = {
         ...invoiceData,
         customer: customerData,
         createdAt: new Date(),
         updatedAt: new Date(),
         status: 'completed',
-        id: `INV-${invoiceData.poNumber}-${Date.now()}`
+        id: `INV-${invoiceData.poNumber}-${randomDigits}`
       };
 
       await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceToSave);
       toast.success('Invoice saved successfully');
       
-      // Clear storage
-      sessionStorage.removeItem('signatureURL');
+      sessionStorage.removeItem('currentInvoice');
       sessionStorage.removeItem('draftInvoice');
       
       navigate('/invoicehistory');
@@ -217,7 +228,6 @@ export default function InvoiceBuilderScreen() {
     setIsLoading(false);
   };
 
-  // Add reset function
   const handleReset = () => {
     if (window.confirm('Are you sure you want to reset the invoice? All data will be lost.')) {
       setInvoiceData({
@@ -228,11 +238,10 @@ export default function InvoiceBuilderScreen() {
         taxRate: 0.1,
         invoiceDate: new Date().toISOString().split('T')[0],
         dueDate: '',
-        notes: '',
-        signatureURL: ''
+        notes: ''
       });
       setActiveStep(0);
-      sessionStorage.removeItem('signatureURL');
+      sessionStorage.removeItem('currentInvoice');
       sessionStorage.removeItem('draftInvoice');
       toast.info('Invoice reset');
     }
@@ -249,6 +258,29 @@ export default function InvoiceBuilderScreen() {
 
   const calculateTotal = () => {
     return calculateSubtotal() + calculateTax();
+  };
+
+  const handleAddLabor = (operation) => {
+    if (!operation) return;
+    
+    const laborPart = {
+      name: `Labor - ${operation.name}`,
+      price: operation.standardHours * (companySettings.preferences?.laborRate || 100), // Default to $100/hr if no rate set
+      type: 'labor',
+      hours: operation.standardHours,
+      description: operation.description
+    };
+
+    updateInvoiceData('parts', [...invoiceData.parts, laborPart]);
+  };
+
+  const handleAddPart = () => {
+    if (newPart.name && newPart.price) {
+      updateInvoiceData('parts', [...invoiceData.parts, { ...newPart, type: 'part' }]);
+      setNewPart({ name: '', price: '' });
+    } else {
+      toast.error('Please enter both part name and price');
+    }
   };
 
   const renderStepContent = () => {
@@ -357,7 +389,23 @@ export default function InvoiceBuilderScreen() {
         return (
           <div className="space-y-4">
             <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-2">Added Parts</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-medium">Parts & Labor</h3>
+                <div className="space-x-2">
+                  <button
+                    onClick={handleAddPart}
+                    className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm"
+                  >
+                    Add Part
+                  </button>
+                  <button
+                    onClick={() => setShowLaborGuide(true)}
+                    className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm"
+                  >
+                    Add Labor
+                  </button>
+                </div>
+              </div>
               {invoiceData.parts.length > 0 ? (
                 <div className="space-y-2">
                   {invoiceData.parts.map((part, index) => (
@@ -421,86 +469,129 @@ export default function InvoiceBuilderScreen() {
       case 3:
         return (
           <div className="space-y-6">
-            <div ref={pdfRef} className="border rounded-lg p-6 space-y-6">
-              <div className="flex justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold">{invoiceData.title}</h2>
-                  <p className="text-gray-600">PO: {invoiceData.poNumber}</p>
-                  <p className="text-gray-600">Date: {invoiceData.invoiceDate}</p>
-                  {invoiceData.dueDate && (
-                    <p className="text-gray-600">Due: {invoiceData.dueDate}</p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">{companySettings?.businessInfo?.name}</p>
-                  <p>{companySettings?.businessInfo?.address}</p>
-                  <p>{companySettings?.businessInfo?.phone}</p>
-                  <p>{companySettings?.businessInfo?.email}</p>
+            <div ref={pdfRef} className="border rounded-lg p-8 space-y-6 bg-white shadow-sm">
+              {/* Professional Header */}
+              <div className="border-b pb-6">
+                <div className="grid grid-cols-2 gap-8">
+                  {/* Company Info - Left */}
+                  <div className="space-y-2">
+                    <div className="h-16 w-32 bg-gray-100 rounded flex items-center justify-center mb-4">
+                      {companySettings?.businessInfo?.logo || 'LOGO'}
+                    </div>
+                    <h3 className="font-bold text-gray-800">{companySettings?.businessInfo?.name}</h3>
+                    <p className="text-sm text-gray-600">{companySettings?.businessInfo?.address}</p>
+                    <p className="text-sm text-gray-600">{companySettings?.businessInfo?.phone}</p>
+                    <p className="text-sm text-gray-600">{companySettings?.businessInfo?.email}</p>
+                  </div>
+                  
+                  {/* Invoice Details - Right */}
+                  <div className="text-right space-y-2">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-4">{invoiceData.title}</h1>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="text-gray-600">PO:</span> <span className="font-semibold">{invoiceData.poNumber}</span></p>
+                      <p><span className="text-gray-600">Invoice ID:</span> <span className="font-semibold">{invoiceData.invoiceId}</span></p>
+                      <p><span className="text-gray-600">Date:</span> <span className="font-semibold">{invoiceData.invoiceDate}</span></p>
+                      {invoiceData.dueDate && (
+                        <p><span className="text-gray-600">Due Date:</span> <span className="font-semibold text-blue-600">{invoiceData.dueDate}</span></p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
+              {/* Bill To Section */}
+              <div className="border-b pb-6">
+                <h3 className="text-gray-600 text-sm mb-2">BILL TO</h3>
+                {(() => {
+                  const customer = customers.find(c => c.id === invoiceData.customer);
+                  return customer && (
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-800">{customer.name}</p>
+                      <p className="text-gray-600">{customer.company}</p>
+                      <p className="text-gray-600">{customer.address}</p>
+                      <p className="text-gray-600">{customer.email}</p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Parts Table */}
+              <div className="py-6">
                 <table className="w-full">
                   <thead>
-                    <tr className="text-left">
-                      <th className="py-2">Description</th>
-                      <th className="py-2 text-right">Amount</th>
+                    <tr className="bg-gray-50">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">Description</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">Amount</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y">
                     {invoiceData.parts.map((part, index) => (
-                      <tr key={index}>
-                        <td className="py-2">{part.name}</td>
-                        <td className="py-2 text-right">${parseFloat(part.price).toFixed(2)}</td>
+                      <tr key={index} className="text-gray-800">
+                        <td className="px-4 py-4">{part.name}</td>
+                        <td className="px-4 py-4 text-right">${parseFloat(part.price).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="border-t">
-                    <tr>
-                      <td className="py-2">Subtotal</td>
-                      <td className="py-2 text-right">${calculateSubtotal().toFixed(2)}</td>
+                  <tfoot className="border-t-2">
+                    <tr className="text-gray-600">
+                      <td className="px-4 py-3">Subtotal</td>
+                      <td className="px-4 py-3 text-right">${calculateSubtotal().toFixed(2)}</td>
                     </tr>
-                    <tr>
-                      <td className="py-2">Tax ({(invoiceData.taxRate * 100).toFixed(1)}%)</td>
-                      <td className="py-2 text-right">${calculateTax().toFixed(2)}</td>
+                    <tr className="text-gray-600">
+                      <td className="px-4 py-3">Tax ({(invoiceData.taxRate * 100).toFixed(1)}%)</td>
+                      <td className="px-4 py-3 text-right">${calculateTax().toFixed(2)}</td>
                     </tr>
-                    <tr className="font-bold">
-                      <td className="py-2">Total</td>
-                      <td className="py-2 text-right">${calculateTotal().toFixed(2)}</td>
+                    <tr className="font-bold text-lg">
+                      <td className="px-4 py-3">Total</td>
+                      <td className="px-4 py-3 text-right">${calculateTotal().toFixed(2)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
 
-              {invoiceData.signatureURL ? (
-                <div className="border-t pt-4">
-                  <h3 className="font-medium mb-2">Signature</h3>
-                  <img
-                    src={invoiceData.signatureURL}
-                    alt="Signature"
-                    className="max-h-32 mx-auto"
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <button
-                    onClick={handleNavigateToSignature}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                  >
-                    Add Signature
-                  </button>
+              {/* Notes Section */}
+              {invoiceData.notes && (
+                <div className="border-t pt-6">
+                  <h3 className="text-gray-600 text-sm mb-2">NOTES</h3>
+                  <p className="text-gray-800 whitespace-pre-line">{invoiceData.notes}</p>
                 </div>
               )}
 
-              <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
-                <textarea
-                  value={invoiceData.notes}
-                  onChange={(e) => updateInvoiceData('notes', e.target.value)}
-                  className="w-full border rounded-lg px-4 py-2"
-                  rows={3}
-                  placeholder="Enter any additional notes..."
-                />
+              {/* Signature Section */}
+              <div className="border-t pt-6">
+                <div className="grid grid-cols-2 gap-8">
+                  <div>
+                    <div className="border-b border-black mt-8 mb-2"></div>
+                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                      <div>
+                        <p>Customer Signature</p>
+                        <p className="font-semibold mt-2">
+                          {(() => {
+                            const customer = customers.find(c => c.id === invoiceData.customer);
+                            return customer ? customer.name : '';
+                          })()}
+                        </p>
+                      </div>
+                      <div>
+                        <p>Date</p>
+                        <p className="font-semibold mt-2">{new Date().toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="inline-block border-2 border-blue-600 rounded-lg px-6 py-3">
+                      <span className="block text-blue-600 font-bold">Total Amount Due</span>
+                      <span className="text-2xl font-bold">${calculateTotal().toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t pt-6 mt-8">
+                <p className="text-center text-sm text-gray-500">
+                  Thank you for your business! Please contact us for any questions regarding this invoice.
+                </p>
               </div>
             </div>
           </div>
@@ -585,6 +676,29 @@ export default function InvoiceBuilderScreen() {
           </button>
         </div>
       </div>
+
+      {/* Labor Guide Modal */}
+      {showLaborGuide && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Labor Guide</h2>
+              <button
+                onClick={() => setShowLaborGuide(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            <LaborGuideSearch
+              onSelectOperation={(op) => {
+                handleAddLabor(op);
+                setShowLaborGuide(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

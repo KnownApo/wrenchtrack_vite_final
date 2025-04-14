@@ -19,6 +19,7 @@ import CustomerHistoryScreen from './screens/CustomerHistoryScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import InvoiceDetailScreen from './screens/InvoiceDetailScreen';
 
 export default function App() {
   return (
@@ -42,10 +43,11 @@ export default function App() {
             <Route path="/invoicehistory" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
             <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
             <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
-            <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
-            <Route path="/customerhistory" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
-          </Routes>
-        </div>
+                <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
+                <Route path="/customerhistory" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
+                <Route path="/invoices/:id" element={<AuthGuard><InvoiceDetailScreen /></AuthGuard>} />
+              </Routes>
+            </div>
       </Router>
     </ErrorBoundary>
   );
