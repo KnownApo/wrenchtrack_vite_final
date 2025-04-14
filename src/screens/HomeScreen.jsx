@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Dashboard from './DashboardScreen';
 import Customers from './CustomersScreen';
 import JobTimer from './JobTimerScreen';
@@ -8,9 +8,43 @@ import InvoiceHistory from './InvoiceHistoryScreen';
 import SignatureScreen from './SignatureScreen';
 import Payments from './PaymentScreen';
 import Settings from './SettingsScreen';
+import { useAuth } from '../AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
 export default function HomeScreen() {
   const [activePage, setActivePage] = useState('dashboard'); // Track the active page
+  const { user } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [userName, setUserName] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      if (user) {
+        const settingsRef = doc(db, 'settings', user.uid);
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data();
+          setAvatarUrl(data.avatarUrl || '');
+          setUserName(data.businessInfo?.name || user.email);
+        }
+      }
+    };
+    loadUserProfile();
+  }, [user]);
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      navigate('/login');
+      toast.success('Logged out successfully');
+    } catch (error) {
+      toast.error('Failed to logout');
+    }
+  };
 
   const pages = [
     { key: 'dashboard', label: 'Dashboard', icon: '📊', component: <Dashboard /> },
@@ -55,17 +89,26 @@ export default function HomeScreen() {
         <header className="bg-white shadow p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800">Welcome to WrenchTrack</h2>
           <div className="flex items-center gap-4">
-            <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
-              Upgrade Plan
-            </button>
             <div className="flex items-center gap-2">
-              <img
-                src="https://via.placeholder.com/40"
-                alt="User Avatar"
-                className="w-10 h-10 rounded-full"
-              />
-              <span className="text-gray-700 font-medium">John Doe</span>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="User Avatar"
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                  {userName?.charAt(0)?.toUpperCase()}
+                </div>
+              )}
+              <span className="text-gray-700 font-medium">{userName}</span>
             </div>
+            <button
+              onClick={handleLogout}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+            >
+              Logout
+            </button>
           </div>
         </header>
 

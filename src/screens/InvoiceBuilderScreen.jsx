@@ -1,626 +1,587 @@
 import React, { useEffect, useState, useRef } from 'react';
+import '../styles/modern.css';
 import { collection, addDoc, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import html2pdf from 'html2pdf.js';
+import { toast } from 'react-toastify';
 
 export default function InvoiceBuilderScreen() {
-  const { user } = useAuth(); // Ensure the user object is provided
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [selectedParts, setSelectedParts] = useState([]);
-  const [invoiceTitle, setInvoiceTitle] = useState('');
-  const [poNumber, setPoNumber] = useState('');
-  const [taxRate, setTaxRate] = useState(0.1);
-  const [signatureURL, setSignatureURL] = useState('');
-  const [companySettings, setCompanySettings] = useState({});
-  const [newPart, setNewPart] = useState({ name: '', price: '' });
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [savedInvoices, setSavedInvoices] = useState([]);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
+  const [activeStep, setActiveStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const pdfRef = useRef();
+  const [newPart, setNewPart] = useState({ name: '', price: '' }); // Add this line
 
-  // Fetch settings and customers
+  // Combined state for invoice data
+  const [invoiceData, setInvoiceData] = useState({
+    title: '',
+    poNumber: '',
+    customer: '',
+    parts: [],
+    taxRate: 0.1,
+    invoiceDate: new Date().toISOString().split('T')[0],
+    dueDate: '',
+    notes: '',
+    signatureURL: ''
+  });
+
+  // Cache state
+  const [customers, setCustomers] = useState([]);
+  const [savedInvoices, setSavedInvoices] = useState([]);
+  const [companySettings, setCompanySettings] = useState({});
+
+  // Steps configuration
+  const steps = [
+    { title: 'Basic Info', icon: '📝' },
+    { title: 'Customer', icon: '👤' },
+    { title: 'Parts', icon: '🔧' },
+    { title: 'Review & Sign', icon: '✍️' }
+  ];
+
+  // Load initial data
   useEffect(() => {
-    if (!user) {
-      console.warn('User is not authenticated. Cannot fetch data.');
-      return;
-    }
-
-    const loadSettings = async () => {
+    const loadInitialData = async () => {
+      if (!user) return;
+      setIsLoading(true);
       try {
-        const ref = doc(db, 'settings', user.uid);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = snap.data();
-          setCompanySettings(data);
-          setInvoiceTitle((prev) => prev || data.preferences?.defaultInvoiceTitle || '');
-          setTaxRate((prev) => prev !== undefined ? prev : data.taxRate || 0.1);
+        // Load settings
+        const settingsSnap = await getDoc(doc(db, 'settings', user.uid));
+        if (settingsSnap.exists()) {
+          const settings = settingsSnap.data();
+          setCompanySettings(settings);
+          setInvoiceData(prev => ({
+            ...prev,
+            title: settings.preferences?.defaultInvoiceTitle || '',
+            taxRate: settings.taxRate || 0.1
+          }));
         }
-      } catch (error) {
-        console.error('Error loading settings:', error);
+
+        // Load customers
+        const customersSnap = await getDocs(collection(db, 'users', user.uid, 'customers'));
+        setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        // Load saved invoices
+        const invoicesSnap = await getDocs(collection(db, 'users', user.uid, 'invoices'));
+        setSavedInvoices(invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+      } catch (err) {
+        setError('Failed to load initial data');
+        toast.error('Failed to load data');
       }
+      setIsLoading(false);
     };
 
-    const loadCustomers = async () => {
-      try {
-        const custSnap = await getDocs(collection(db, 'users', user.uid, 'customers'));
-        setCustomers(custSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      } catch (error) {
-        console.error('Error loading customers:', error);
-      }
-    };
-
-    loadSettings();
-    loadCustomers();
+    loadInitialData();
   }, [user]);
 
-  // Fetch saved invoices
-  useEffect(() => {
-    if (!user) return;
+  // Handle form updates
+  const updateInvoiceData = (field, value) => {
+    setInvoiceData(prev => ({ ...prev, [field]: value }));
+  };
 
-    const fetchSavedInvoices = async () => {
-      try {
-        const invoicesRef = collection(db, 'users', user.uid, 'invoices');
-        const snapshot = await getDocs(invoicesRef);
-        const invoices = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setSavedInvoices(invoices);
-      } catch (error) {
-        console.error('Error fetching saved invoices:', error);
-      }
-    };
-
-    fetchSavedInvoices();
-  }, [user]);
-
-  // Load a saved invoice
-  const handleLoadInvoice = async () => {
-    if (!selectedInvoiceId) {
-      alert('Please select an invoice to load.');
-      return;
-    }
-
-    try {
-      const invoiceRef = doc(db, 'users', user.uid, 'invoices', selectedInvoiceId);
-      const invoiceSnap = await getDoc(invoiceRef);
-
-      if (invoiceSnap.exists()) {
-        const invoiceData = invoiceSnap.data();
-        setInvoiceTitle(invoiceData.title || '');
-        setPoNumber(invoiceData.po || '');
-        setSelectedCustomer(invoiceData.customer?.id || '');
-        setSelectedParts(invoiceData.parts || []);
-        setInvoiceDate(invoiceData.invoiceDate || new Date().toISOString().split('T')[0]);
-        setDueDate(invoiceData.dueDate || '');
-        setNotes(invoiceData.notes || '');
-        alert('✅ Invoice loaded successfully.');
-      } else {
-        alert('❌ Invoice not found.');
-      }
-    } catch (error) {
-      console.error('Error loading invoice:', error);
-      alert('❌ Failed to load invoice.');
+  // Navigation between steps
+  const nextStep = () => {
+    if (validateCurrentStep()) {
+      setActiveStep(prev => Math.min(prev + 1, steps.length - 1));
     }
   };
 
-  // Add a part to the invoice
-  const handleAddPart = () => {
-    if (!newPart.name || !newPart.price) {
-      alert('Please provide both part name and price.');
-      return;
+  const prevStep = () => {
+    setActiveStep(prev => Math.max(prev - 1, 0));
+  };
+
+  // Validation
+  const validateCurrentStep = () => {
+    switch (activeStep) {
+      case 0:
+        if (!invoiceData.title || !invoiceData.poNumber) {
+          toast.error('Please fill in all required fields');
+          return false;
+        }
+        break;
+      case 1:
+        if (!invoiceData.customer) {
+          toast.error('Please select a customer');
+          return false;
+        }
+        break;
+      case 2:
+        if (!invoiceData.parts.length) {
+          toast.error('Please add at least one part');
+          return false;
+        }
+        break;
+      default:
+        return true;
     }
-    setSelectedParts([...selectedParts, { ...newPart, price: parseFloat(newPart.price) }]);
-    setNewPart({ name: '', price: '' });
+    return true;
   };
 
-  // Remove a part from the invoice
-  const handleRemovePart = (index) => {
-    const updatedParts = selectedParts.filter((_, i) => i !== index);
-    setSelectedParts(updatedParts);
-  };
-
-  // Navigate to the signature screen
+  // Add missing handlers
   const handleNavigateToSignature = () => {
+    // Save current invoice state
+    sessionStorage.setItem('draftInvoice', JSON.stringify(invoiceData));
+    // Navigate to signature screen
     navigate('/signature');
   };
 
-  // Generate a unique invoice ID
-  const generateInvoiceId = () => {
-    const randomSequence = Math.floor(100000 + Math.random() * 900000);
-    return `INV-${poNumber}-${randomSequence}`;
-  };
-
-  // Calculate subtotal, tax, and total
-  const subtotal = selectedParts.reduce((sum, part) => sum + (part.price || 0), 0);
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
-
-  // Load persisted invoice state from sessionStorage
-  useEffect(() => {
-    const savedInvoice = sessionStorage.getItem('invoiceState');
-    if (savedInvoice) {
-      try {
-        const parsedInvoice = JSON.parse(savedInvoice);
-        console.log('Loaded invoice state from sessionStorage:', parsedInvoice); // Debugging log
-        setInvoiceTitle(parsedInvoice.invoiceTitle || '');
-        setPoNumber(parsedInvoice.poNumber || '');
-        setSelectedCustomer(parsedInvoice.selectedCustomer || '');
-        setSelectedParts(parsedInvoice.selectedParts || []);
-        setInvoiceDate(parsedInvoice.invoiceDate || new Date().toISOString().split('T')[0]);
-        setDueDate(parsedInvoice.dueDate || '');
-        setNotes(parsedInvoice.notes || '');
-        setSignatureURL(parsedInvoice.signatureURL || '');
-      } catch (error) {
-        console.error('Error parsing saved invoice state:', error);
-        sessionStorage.removeItem('invoiceState'); // Clear corrupted state
-      }
-    }
-  }, []);
-
-  // Persist invoice state to sessionStorage whenever it changes
-  useEffect(() => {
-    const invoiceState = {
-      invoiceTitle,
-      poNumber,
-      selectedCustomer,
-      selectedParts,
-      invoiceDate,
-      dueDate,
-      notes,
-      signatureURL,
-    };
-    try {
-      sessionStorage.setItem('invoiceState', JSON.stringify(invoiceState));
-      console.log('Saved invoice state to sessionStorage:', invoiceState); // Debugging log
-    } catch (error) {
-      console.error('Error saving invoice state:', error);
-    }
-  }, [invoiceTitle, poNumber, selectedCustomer, selectedParts, invoiceDate, dueDate, notes, signatureURL]);
-
-  // Reset the invoice and clear sessionStorage
-  const resetInvoice = () => {
-    if (window.confirm('Are you sure you want to reset the invoice? This action cannot be undone.')) {
-      setInvoiceTitle('');
-      setPoNumber('');
-      setSelectedCustomer('');
-      setSelectedParts([]);
-      setInvoiceDate(new Date().toISOString().split('T')[0]);
-      setDueDate('');
-      setNotes('');
-      setSignatureURL(''); // Clear the signature
-      sessionStorage.removeItem('invoiceState'); // Clear session storage
-      sessionStorage.removeItem('signatureURL'); // Clear signature from session storage
-      alert('Invoice has been reset.');
-    }
-  };
-
-  const handleSaveInvoice = async () => {
-    if (!selectedCustomer || selectedParts.length === 0 || !invoiceTitle || !poNumber) {
-      alert('Please fill out all invoice details.');
-      return;
-    }
-
-    if (!signatureURL) {
-      alert('Please capture a signature before saving the invoice.');
-      return;
-    }
-
-    const invoiceId = generateInvoiceId(); // Generate the invoice ID
-
-    try {
-      const customerRef = doc(db, 'users', user.uid, 'customers', selectedCustomer);
-      const customerSnap = await getDoc(customerRef);
-      const customerData = customerSnap.exists() ? customerSnap.data() : null;
-
-      const invoiceData = {
-        id: invoiceId,
-        title: invoiceTitle,
-        po: poNumber,
-        customer: customerData,
-        parts: selectedParts,
-        subtotal,
-        tax,
-        total,
-        invoiceDate,
-        dueDate,
-        notes,
-        signatureURL,
-        createdAt: new Date(),
-      };
-
-      await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceData);
-      alert('✅ Invoice saved successfully.');
-
-      // Clear the signature after saving
-      console.log('Clearing signature after saving...');
-      setSignatureURL('');
-      sessionStorage.removeItem('signatureURL');
-      console.log('Signature cleared.');
-
-      resetInvoice(); // Reset the invoice after saving
-    } catch (error) {
-      console.error('Error saving invoice:', error);
-      alert('❌ Failed to save invoice.');
-    }
-  };
-
-  const handleDownloadInvoice = () => {
+  const handleDownloadPdf = () => {
     if (!pdfRef.current) {
-      alert('Invoice preview is not available.');
+      toast.error('Preview not available');
       return;
     }
 
     const element = pdfRef.current;
+    const opt = {
+      margin: 1,
+      filename: `invoice-${invoiceData.poNumber}-${Date.now()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
 
-    html2pdf()
-      .set({
-        margin: [0.5, 0.5, 0.5, 0.5], // Top, Right, Bottom, Left margins
-        filename: `invoice_${Date.now()}.pdf`,
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-      })
-      .from(element)
-      .toPdf()
-      .get('pdf')
-      .then((pdf) => {
-        const pageCount = pdf.internal.getNumberOfPages();
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-
-        // Add header and footer to each page
-        for (let i = 1; i <= pageCount; i++) {
-          pdf.setPage(i);
-
-          // Header
-          pdf.setFontSize(10);
-          pdf.text('Your Company Name', 0.5, 0.5);
-          pdf.text('Invoice', pageWidth / 2, 0.5, { align: 'center' });
-
-          // Footer
-          pdf.setFontSize(8);
-          pdf.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 0.5, { align: 'center' });
-          pdf.text('Thank you for your business!', 0.5, pageHeight - 0.5);
-        }
-      })
-      .save()
-      .then(() => {
-        // Clear the signature after downloading
-        console.log('Clearing signature after downloading...');
-        setSignatureURL('');
-        sessionStorage.removeItem('signatureURL');
-        console.log('Signature cleared.');
-      })
-      .catch((error) => {
-        console.error('Error generating PDF:', error);
-        alert('❌ Failed to download invoice.');
+    html2pdf().set(opt).from(element).save()
+      .then(() => toast.success('PDF downloaded successfully'))
+      .catch(err => {
+        console.error('PDF generation failed:', err);
+        toast.error('Failed to generate PDF');
       });
   };
 
-  const loadInvoice = async () => {
-    if (!selectedInvoiceId) return;
-    const invoiceSnap = await getDoc(invoiceRef);
+  // Load signature from storage
+  useEffect(() => {
+    const savedSignature = sessionStorage.getItem('signatureURL');
+    if (savedSignature) {
+      updateInvoiceData('signatureURL', savedSignature);
+    }
+  }, []);
 
-    if (invoiceSnap.exists()) {
-      const invoiceData = invoiceSnap.data();
-      setPoNumber(invoiceData.po || '');
-      setSelectedCustomer(invoiceData.customer?.id || '');
-      setSelectedParts(invoiceData.parts || []);
-      setInvoiceDate(invoiceData.invoiceDate || new Date().toISOString().split('T')[0]);
-      setDueDate(invoiceData.dueDate || '');
-      setNotes(invoiceData.notes || '');
-      alert('✅ Invoice loaded successfully.');
-  } else {
-      alert('❌ Invoice not found.');
+  // Load draft invoice if exists
+  useEffect(() => {
+    const draftInvoice = sessionStorage.getItem('draftInvoice');
+    if (draftInvoice) {
+      try {
+        const parsed = JSON.parse(draftInvoice);
+        setInvoiceData(prev => ({ ...prev, ...parsed }));
+        sessionStorage.removeItem('draftInvoice'); // Clear after loading
+      } catch (err) {
+        console.error('Error loading draft invoice:', err);
+      }
+    }
+  }, []);
+
+  // Add cleanup function
+  useEffect(() => {
+    return () => {
+      // Cleanup on component unmount
+      sessionStorage.removeItem('draftInvoice');
+    };
+  }, []);
+
+  // Update handleSaveInvoice
+  const handleSaveInvoice = async () => {
+    if (!validateCurrentStep()) return;
+    if (!invoiceData.signatureURL) {
+      toast.error('Please add a signature before saving');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const customerData = customers.find(c => c.id === invoiceData.customer);
+      const invoiceToSave = {
+        ...invoiceData,
+        customer: customerData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: 'completed',
+        id: `INV-${invoiceData.poNumber}-${Date.now()}`
+      };
+
+      await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceToSave);
+      toast.success('Invoice saved successfully');
+      
+      // Clear storage
+      sessionStorage.removeItem('signatureURL');
+      sessionStorage.removeItem('draftInvoice');
+      
+      navigate('/invoicehistory');
+    } catch (err) {
+      console.error('Error saving invoice:', err);
+      toast.error('Failed to save invoice');
+    }
+    setIsLoading(false);
+  };
+
+  // Add reset function
+  const handleReset = () => {
+    if (window.confirm('Are you sure you want to reset the invoice? All data will be lost.')) {
+      setInvoiceData({
+        title: '',
+        poNumber: '',
+        customer: '',
+        parts: [],
+        taxRate: 0.1,
+        invoiceDate: new Date().toISOString().split('T')[0],
+        dueDate: '',
+        notes: '',
+        signatureURL: ''
+      });
+      setActiveStep(0);
+      sessionStorage.removeItem('signatureURL');
+      sessionStorage.removeItem('draftInvoice');
+      toast.info('Invoice reset');
     }
   };
 
-  // Fetch the saved signature when the component loads
-  useEffect(() => {
-    if (!user) return;
+  // Add helper functions
+  const calculateSubtotal = () => {
+    return invoiceData.parts.reduce((sum, part) => sum + (parseFloat(part.price) || 0), 0);
+  };
 
-    const loadSignature = async () => {
-      try {
-        const userSettingsRef = doc(db, 'users', user.uid, 'settings', 'signature');
-        const signatureSnap = await getDoc(userSettingsRef);
+  const calculateTax = () => {
+    return calculateSubtotal() * invoiceData.taxRate;
+  };
 
-        if (signatureSnap.exists()) {
-          const data = signatureSnap.data();
-          setSignatureURL(data.signatureURL || ''); // Load the saved signature URL
-        }
-      } catch (error) {
-        console.error('Error loading signature:', error);
-      }
-    };
+  const calculateTotal = () => {
+    return calculateSubtotal() + calculateTax();
+  };
 
-    loadSignature();
-
-    // Clear the signature when the component unmounts
-    return () => {
-      console.log('Clearing signature on unmount...');
-      setSignatureURL('');
-      sessionStorage.removeItem('signatureURL');
-    };
-  }, [user]);
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Home Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/')}
-            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
-          >
-            ← Back to Home
-          </button>
-        </div>
-
-        <h1 className="text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-12">
-          ✨ Build Your Invoice
-        </h1>
-
-        {/* Load Saved Invoice */}
-        <div className="bg-white shadow-lg rounded-3xl p-8 mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">📂 Load a Saved Invoice</h2>
-          <div className="flex gap-4">
-            <select
-              value={selectedInvoiceId}
-              onChange={(e) => setSelectedInvoiceId(e.target.value)}
-              className="flex-1 p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-            >
-              <option value="">-- Select an Invoice --</option>
-              {savedInvoices.map((invoice) => (
-                <option key={invoice.id} value={invoice.id}>
-                  {invoice.title} (PO: {invoice.po})
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleLoadInvoice}
-              className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition"
-            >
-              Load Invoice
-            </button>
-          </div>
-        </div>
-
-        {/* Invoice Details */}
-        <div className="bg-white shadow-lg rounded-3xl p-8 mb-10">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">📝 Invoice Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex flex-col">
-              <label className="text-lg font-medium text-gray-700 mb-2">Invoice Title</label>
+  const renderStepContent = () => {
+    switch (activeStep) {
+      case 0:
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Title *</label>
               <input
-                value={invoiceTitle}
-                onChange={(e) => setInvoiceTitle(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
+                type="text"
+                value={invoiceData.title}
+                onChange={(e) => updateInvoiceData('title', e.target.value)}
+                className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter invoice title"
               />
             </div>
-            <div className="flex flex-col">
-              <label className="text-lg font-medium text-gray-700 mb-2">PO Number</label>
-              <input
-                value={poNumber}
-                onChange={(e) => setPoNumber(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-                placeholder="Enter PO number"
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">PO Number *</label>
+                <input
+                  type="text"
+                  value={invoiceData.poNumber}
+                  onChange={(e) => updateInvoiceData('poNumber', e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter PO number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>
+                <input
+                  type="number"
+                  value={invoiceData.taxRate * 100}
+                  onChange={(e) => updateInvoiceData('taxRate', Math.max(0, Math.min(100, parseFloat(e.target.value))) / 100)}
+                  className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                />
+              </div>
             </div>
-            <div className="flex flex-col">
-              <label className="text-lg font-medium text-gray-700 mb-2">Invoice Date</label>
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date *</label>
+                <input
+                  type="date"
+                  value={invoiceData.invoiceDate}
+                  onChange={(e) => updateInvoiceData('invoiceDate', e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                <input
+                  type="date"
+                  value={invoiceData.dueDate}
+                  onChange={(e) => updateInvoiceData('dueDate', e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                  min={invoiceData.invoiceDate}
+                />
+              </div>
             </div>
-            <div className="flex flex-col">
-              <label className="text-lg font-medium text-gray-700 mb-2">Due Date</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-              />
-            </div>
-            <div className="flex flex-col md:col-span-2">
-              <label className="text-lg font-medium text-gray-700 mb-2">Select Customer</label>
+          </div>
+        );
+
+      case 1:
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Customer *</label>
               <select
-                value={selectedCustomer}
-                onChange={(e) => setSelectedCustomer(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
+                value={invoiceData.customer}
+                onChange={(e) => updateInvoiceData('customer', e.target.value)}
+                className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">-- Choose Customer --</option>
+                <option value="">Choose a customer</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {c.name} {c.company ? `(${c.company})` : ''}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="flex flex-col md:col-span-2">
-              <label className="text-lg font-medium text-gray-700 mb-2">Additional Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-                placeholder="Enter any additional notes for the invoice"
-                rows="3"
-              ></textarea>
-            </div>
-          </div>
-        </div>
 
-        {/* Parts Section */}
-        <div className="bg-white shadow-lg rounded-3xl p-8 mb-10">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">🔧 Parts</h2>
-          <ul className="list-disc pl-5 mb-6">
-            {selectedParts.map((part, index) => (
-              <li key={index} className="flex justify-between items-center">
-                <span>{part.name} - ${part.price.toFixed(2)}</span>
-                <button
-                  onClick={() => handleRemovePart(index)}
-                  className="text-red-500 hover:underline"
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex flex-col sm:flex-row items-center mt-4 space-y-2 sm:space-y-0 sm:space-x-2">
-            <input
-              type="text"
-              placeholder="Part Name"
-              value={newPart.name}
-              onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
-              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-            />
-            <input
-              type="number"
-              placeholder="Price"
-              value={newPart.price}
-              onChange={(e) => setNewPart({ ...newPart, price: e.target.value })}
-              className="p-3 border border-gray-300 rounded-lg shadow-inner focus:ring focus:ring-blue-300"
-            />
-            <button
-              onClick={handleAddPart}
-              className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition"
-            >
-              Add Part
-            </button>
+            {invoiceData.customer && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                {(() => {
+                  const customer = customers.find(c => c.id === invoiceData.customer);
+                  return customer && (
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Customer Details</h3>
+                      <p>{customer.address}</p>
+                      <p>Email: {customer.email}</p>
+                      <p>Phone: {customer.phone}</p>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
-        </div>
+        );
 
-        {/* Signature Section */}
-        <div className="bg-white shadow-lg rounded-3xl p-8 mb-10">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">✍️ Signature</h2>
-          {signatureURL ? (
-            <div className="text-center">
-              <img src={signatureURL} alt="Captured Signature" className="mx-auto border rounded-lg shadow-md" />
-              <p className="text-gray-600 mt-4">Signature captured successfully.</p>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center">No signature captured yet.</p>
-          )}
-          <div className="text-center mt-6">
-            <button
-              onClick={handleNavigateToSignature}
-              className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-600 transition"
-            >
-              Capture Signature
-            </button>
-          </div>
-        </div>
-
-        {/* Invoice Preview */}
-        <div
-          ref={pdfRef}
-          className="bg-white shadow-lg rounded-3xl p-8 mt-12 border border-gray-300"
-        >
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h2 className="text-3xl font-extrabold text-blue-700">{invoiceTitle}</h2>
-              <p className="text-lg text-gray-600 font-medium">Invoice ID: {generateInvoiceId()}</p>
-              <p className="text-lg text-gray-600 font-medium">PO: {poNumber}</p>
-              <p className="text-lg text-gray-600 font-medium">Invoice Date: {invoiceDate}</p>
-              <p className="text-lg text-gray-600 font-medium">Due Date: {dueDate || 'N/A'}</p>
-            </div>
-            <div className="text-right">
-              {companySettings?.businessInfo?.name && (
-                <>
-                  <p className="font-semibold text-gray-700 text-lg">{companySettings.businessInfo.name}</p>
-                  <p className="text-gray-600">{companySettings.businessInfo.address}</p>
-                  <p className="text-gray-600">{companySettings.businessInfo.email}</p>
-                  <p className="text-gray-600">{companySettings.businessInfo.phone}</p>
-                </>
+      case 2:
+        return (
+          <div className="space-y-4">
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2">Added Parts</h3>
+              {invoiceData.parts.length > 0 ? (
+                <div className="space-y-2">
+                  {invoiceData.parts.map((part, index) => (
+                    <div key={index} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                      <span>{part.name}</span>
+                      <div className="flex items-center gap-4">
+                        <span>${parseFloat(part.price).toFixed(2)}</span>
+                        <button
+                          onClick={() => updateInvoiceData('parts', invoiceData.parts.filter((_, i) => i !== index))}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-right text-sm text-gray-600 mt-2">
+                    Subtotal: ${calculateSubtotal().toFixed(2)}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center">No parts added yet</p>
               )}
             </div>
-          </div>
 
-          <table className="w-full text-lg border mb-8">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="text-left p-3 border font-semibold text-gray-700">Description</th>
-                <th className="text-right p-3 border font-semibold text-gray-700">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedParts.map((part, index) => (
-                <tr key={index}>
-                  <td className="border p-3 text-gray-700 font-medium">{part.name}</td>
-                  <td className="border p-3 text-right text-gray-700 font-medium">${part.price.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="text-right space-y-2 text-lg">
-            <p className="text-gray-700 font-medium">Subtotal: ${subtotal.toFixed(2)}</p>
-            <p className="text-gray-700 font-medium">Tax: ${tax.toFixed(2)}</p>
-            <p className="text-xl font-bold text-gray-800">Total: ${total.toFixed(2)}</p>
-          </div>
-
-          {signatureURL && (
-            <div className="mt-8 text-center">
-              <h3 className="text-lg font-semibold text-gray-700">Customer Signature:</h3>
-              <img src={signatureURL} alt="Customer Signature" className="mx-auto border rounded-lg shadow-md mt-4" />
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-2">Add New Part</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Part name"
+                  value={newPart.name}
+                  onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+                  className="flex-1 border rounded-lg px-4 py-2"
+                />
+                <input
+                  type="number"
+                  placeholder="Price"
+                  value={newPart.price}
+                  onChange={(e) => setNewPart({ ...newPart, price: e.target.value })}
+                  className="w-32 border rounded-lg px-4 py-2"
+                  min="0"
+                  step="0.01"
+                />
+                <button
+                  onClick={() => {
+                    if (newPart.name && newPart.price) {
+                      updateInvoiceData('parts', [...invoiceData.parts, { ...newPart }]);
+                      setNewPart({ name: '', price: '' });
+                    }
+                  }}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                >
+                  Add
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+        );
 
-          {notes && (
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold text-gray-700">Additional Notes:</h3>
-              <p className="text-gray-600">{notes}</p>
+      case 3:
+        return (
+          <div className="space-y-6">
+            <div ref={pdfRef} className="border rounded-lg p-6 space-y-6">
+              <div className="flex justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">{invoiceData.title}</h2>
+                  <p className="text-gray-600">PO: {invoiceData.poNumber}</p>
+                  <p className="text-gray-600">Date: {invoiceData.invoiceDate}</p>
+                  {invoiceData.dueDate && (
+                    <p className="text-gray-600">Due: {invoiceData.dueDate}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-bold">{companySettings?.businessInfo?.name}</p>
+                  <p>{companySettings?.businessInfo?.address}</p>
+                  <p>{companySettings?.businessInfo?.phone}</p>
+                  <p>{companySettings?.businessInfo?.email}</p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left">
+                      <th className="py-2">Description</th>
+                      <th className="py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceData.parts.map((part, index) => (
+                      <tr key={index}>
+                        <td className="py-2">{part.name}</td>
+                        <td className="py-2 text-right">${parseFloat(part.price).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t">
+                    <tr>
+                      <td className="py-2">Subtotal</td>
+                      <td className="py-2 text-right">${calculateSubtotal().toFixed(2)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2">Tax ({(invoiceData.taxRate * 100).toFixed(1)}%)</td>
+                      <td className="py-2 text-right">${calculateTax().toFixed(2)}</td>
+                    </tr>
+                    <tr className="font-bold">
+                      <td className="py-2">Total</td>
+                      <td className="py-2 text-right">${calculateTotal().toFixed(2)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {invoiceData.signatureURL ? (
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-2">Signature</h3>
+                  <img
+                    src={invoiceData.signatureURL}
+                    alt="Signature"
+                    className="max-h-32 mx-auto"
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <button
+                    onClick={handleNavigateToSignature}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                  >
+                    Add Signature
+                  </button>
+                </div>
+              )}
+
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
+                <textarea
+                  value={invoiceData.notes}
+                  onChange={(e) => updateInvoiceData('notes', e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2"
+                  rows={3}
+                  placeholder="Enter any additional notes..."
+                />
+              </div>
             </div>
-          )}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Add this to the header section of your return statement
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+    </div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Add header with reset and download buttons */}
+        <div className="flex justify-between items-center mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+          >
+            ← Back
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleReset}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
+            >
+              Reset
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+            >
+              Download PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Steps Progress */}
+        <div className="flex justify-between mb-8">
+          {steps.map((step, index) => (
+            <button
+              key={index}
+              onClick={() => index < activeStep && setActiveStep(index)}
+              className={`flex items-center gap-2 p-2 rounded-lg transition ${
+                index === activeStep ? 'bg-blue-500 text-white' : 
+                index < activeStep ? 'bg-green-100 text-green-700' : 'bg-gray-100'
+              }`}
+            >
+              <span>{step.icon}</span>
+              <span>{step.title}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Main Content */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          {renderStepContent()}
         </div>
 
         {/* Navigation Buttons */}
-        <div className="flex justify-center gap-6 mt-10">
+        <div className="flex justify-between mt-6">
           <button
-            onClick={() => navigate('/customers')}
-            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+            onClick={prevStep}
+            className={`px-4 py-2 rounded-lg ${
+              activeStep === 0 ? 'invisible' : 'bg-gray-500 text-white'
+            }`}
           >
-            Go to Customers
+            Previous
           </button>
           <button
-            onClick={() => navigate('/invoicehistory')}
-            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+            onClick={activeStep === steps.length - 1 ? handleSaveInvoice : nextStep}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg"
           >
-            View All Invoices
-          </button>
-          <button
-            onClick={() => navigate('/signature')}
-            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
-          >
-            Capture Signature
-          </button>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-center gap-6 mt-10">
-          <button
-            onClick={handleSaveInvoice}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-          >
-            Save Invoice
-          </button>
-          <button
-            onClick={handleDownloadInvoice}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition"
-          >
-            Download Invoice
-          </button>
-          <button
-            onClick={resetInvoice}
-            className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 transition"
-          >
-            Reset Invoice
+            {activeStep === steps.length - 1 ? 'Save Invoice' : 'Next'}
           </button>
         </div>
       </div>

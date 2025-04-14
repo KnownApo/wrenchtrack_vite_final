@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../firebase';
+import { db, auth, storage } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 
 export default function SettingsScreen() {
   const [theme, setTheme] = useState('light');
@@ -9,6 +12,9 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(false);
 
   const user = auth.currentUser;
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) return;
@@ -20,29 +26,57 @@ export default function SettingsScreen() {
         setTheme(data.theme || 'light');
         setBusinessInfo(data.businessInfo || {});
         setPreferences(data.preferences || { currency: 'USD', invoiceTerms: 'Net 30', defaultInvoiceTitle: 'Service Invoice' });
+        setAvatarUrl(data.avatarUrl || '');
       }
     };
     fetchSettings();
   }, [user]);
 
-  const handleChange = (e, section) => {
-    const { name, value } = e.target;
-    if (section === 'business') {
-      setBusinessInfo({ ...businessInfo, [name]: value });
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setAvatarFile(file);
     } else {
-      setPreferences({ ...preferences, [name]: value });
+      toast.error('Please select an image file');
     }
   };
 
   const handleSave = async () => {
     if (!user) {
-      alert('Please log in to save settings.');
+      toast.error('Please log in to save settings');
       return;
     }
     setLoading(true);
-    await setDoc(doc(db, 'settings', user.uid), { theme, businessInfo, preferences });
-    alert('✅ Settings saved.');
+    try {
+      let avatarURL = avatarUrl;
+      if (avatarFile) {
+        const storageRef = ref(storage, `avatars/${user.uid}`);
+        await uploadBytes(storageRef, avatarFile);
+        avatarURL = await getDownloadURL(storageRef);
+      }
+
+      await setDoc(doc(db, 'settings', user.uid), {
+        theme,
+        businessInfo,
+        preferences,
+        avatarUrl: avatarURL,
+      });
+      toast.success('Settings saved successfully');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    }
     setLoading(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      navigate('/login');
+      toast.success('Logged out successfully');
+    } catch (error) {
+      toast.error('Failed to logout');
+    }
   };
 
   return (
@@ -97,13 +131,43 @@ export default function SettingsScreen() {
           />
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700 transition"
-        >
-          {loading ? 'Saving...' : 'Save Settings'}
-        </button>
+        <div className="bg-white max-w-2xl mx-auto rounded-lg shadow p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Profile Settings</h2>
+          
+          <div className="mb-6">
+            <label className="block font-medium mb-2">Avatar</label>
+            {avatarUrl && (
+              <img
+                src={avatarUrl}
+                alt="Profile"
+                className="w-24 h-24 rounded-full mb-4 object-cover"
+              />
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700 transition"
+            >
+              {loading ? 'Saving...' : 'Save Settings'}
+            </button>
+            
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 text-white py-2 px-6 rounded hover:bg-red-700 transition"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

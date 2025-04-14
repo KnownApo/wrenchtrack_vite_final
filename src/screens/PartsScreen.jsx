@@ -1,278 +1,354 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { useAuth } from '../AuthContext';
 
 export default function PartsScreen() {
-  const navigate = useNavigate(); // Add navigation hook
-  const { parts = [], setParts } = useContext(JobLogContext); // Fallback to an empty array if parts is undefined
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('');
-  const [stock, setStock] = useState('');
+  const navigate = useNavigate();
+  const { parts = [], setParts } = useContext(JobLogContext);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [view, setView] = useState('grid'); // 'grid' or 'list'
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newPart, setNewPart] = useState({
+    name: '',
+    price: '',
+    category: '',
+    stock: '',
+    description: '',
+    minStock: 5,
+  });
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOption, setSortOption] = useState('');
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [editData, setEditData] = useState({ name: '', price: '', category: '', stock: '' });
-  const [catalogParts, setCatalogParts] = useState([]); // Parts catalog for the invoice screen
-  
+  const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const fetchCatalogParts = async () => {
-      const partsRef = collection(db, 'users', 'partsCatalog');
-      const snapshot = await getDocs(partsRef);
-      const fetchedParts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setCatalogParts(fetchedParts);
-    };
+  // Predefined categories
+  const categories = [
+    'Engine Parts',
+    'Brakes',
+    'Suspension',
+    'Electrical',
+    'Body Parts',
+    'Interior',
+    'Other'
+  ];
 
-    fetchCatalogParts();
-  }, []);
-
-  const addPartToCatalog = async () => {
-    if (name && price) {
-      const newPart = { name, price: parseFloat(price), category };
-      await addDoc(collection(db, 'users', 'partsCatalog'), newPart);
-      setCatalogParts([...catalogParts, newPart]);
-      setName('');
-      setPrice('');
-      setCategory('');
+  const fetchParts = async () => {
+    if (!user) {
+      toast.error('Please log in to view parts');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const snapshot = await getDocs(collection(db, 'users', user.uid, 'parts'));
+      const fetchedParts = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setParts(fetchedParts);
+    } catch (error) {
+      console.error('Error fetching parts:', error);
+      toast.error('Failed to load parts');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const addPartToStock = () => {
-    if (name && price && stock) {
-      setParts([...parts, { name, price: parseFloat(price), category, stock: parseInt(stock, 10) }]);
-      setName('');
-      setPrice('');
-      setCategory('');
-      setStock('');
+  const handleAddPart = async () => {
+    if (!user) {
+      toast.error('Please log in to add parts');
+      return;
+    }
+
+    if (!newPart.name || !newPart.price || !newPart.category) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const partData = {
+        ...newPart,
+        price: parseFloat(newPart.price) || 0,
+        stock: parseInt(newPart.stock) || 0,
+        minStock: parseInt(newPart.minStock) || 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        userId: user.uid
+      };
+
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'parts'), partData);
+      
+      // Add the new part with its ID to the local state
+      setParts(prev => [...prev, { id: docRef.id, ...partData }]);
+      
+      setShowAddModal(false);
+      setNewPart({
+        name: '',
+        price: '',
+        category: '',
+        stock: '',
+        description: '',
+        minStock: 5,
+      });
+      
+      toast.success('Part added successfully');
+    } catch (error) {
+      console.error('Error adding part:', error);
+      toast.error('Failed to add part. Please try again.');
     }
   };
 
-  const deletePart = (index) => {
-    setParts(parts.filter((_, i) => i !== index));
+  const handleDelete = async (partId) => {
+    if (!user) {
+      toast.error('Please log in to delete parts');
+      return;
+    }
+
+    if (window.confirm('Are you sure you want to delete this part?')) {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'parts', partId));
+        setParts(prev => prev.filter(part => part.id !== partId));
+        toast.success('Part deleted successfully');
+      } catch (error) {
+        console.error('Error deleting part:', error);
+        toast.error('Failed to delete part');
+      }
+    }
   };
 
-  const startEditing = (index) => {
-    setEditingIndex(index);
-    setEditData(parts[index]);
-  };
+  const handleUpdateStock = async (partId, newStock) => {
+    if (!user) {
+      toast.error('Please log in to update stock');
+      return;
+    }
 
-  const saveEdit = () => {
-    const updatedParts = [...parts];
-    updatedParts[editingIndex] = editData;
-    setParts(updatedParts);
-    setEditingIndex(null);
-    setEditData({ name: '', price: '', category: '', stock: '' });
-  };
-
-  const restockPart = (index, amount) => {
-    const updatedParts = [...parts];
-    updatedParts[index].stock += amount;
-    setParts(updatedParts);
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'parts', partId), { 
+        stock: newStock,
+        updatedAt: new Date()
+      });
+      setParts(prev => prev.map(part => 
+        part.id === partId ? { ...part, stock: newStock } : part
+      ));
+      toast.success('Stock updated successfully');
+    } catch (error) {
+      console.error('Error updating stock:', error);
+      toast.error('Failed to update stock');
+    }
   };
 
   const filteredParts = parts
-    .filter(part => part.name.toLowerCase().includes(searchQuery.toLowerCase()) || part.category.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter(part => {
+      const matchesSearch = part.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          part.category?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || part.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    })
     .sort((a, b) => {
-      if (sortOption === 'name') return a.name.localeCompare(b.name);
-      if (sortOption === 'price') return a.price - b.price;
-      if (sortOption === 'stock') return a.stock - b.stock;
-      if (sortOption === 'category') return a.category.localeCompare(b.category);
-      return 0;
+      const direction = sortBy.direction === 'asc' ? 1 : -1;
+      if (sortBy.field === 'price') {
+        return (a.price - b.price) * direction;
+      }
+      return a[sortBy.field].localeCompare(b[sortBy.field]) * direction;
     });
 
+  useEffect(() => {
+    if (user) {
+      fetchParts();
+    }
+  }, [user]);
+
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      {/* Home Button */}
-      <div className="mb-6">
+    <div className="min-h-screen bg-gray-50 p-6">
+      {/* Header */}
+      <div className="mb-8 flex justify-between items-center">
         <button
           onClick={() => navigate('/')}
-          className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+          className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition"
         >
-          ← Back to Home
+          ← Back
         </button>
-      </div>
-
-      <h2 className="text-3xl font-bold mb-6 text-blue-800">🔧 Parts Management</h2>
-
-      {/* Add Part to Catalog Section */}
-      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-        <h3 className="text-xl font-semibold mb-4 text-gray-700">Add Part to Catalog</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Part Name"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-          <input
-            value={price}
-            onChange={e => setPrice(e.target.value)}
-            placeholder="Price"
-            type="number"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-          <input
-            value={category}
-            onChange={e => setCategory(e.target.value)}
-            placeholder="Category (e.g., Engine, Tires)"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-        </div>
+        <h1 className="text-3xl font-bold text-gray-800">Parts Catalog</h1>
         <button
-          onClick={addPartToCatalog}
-          className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+          onClick={() => setShowAddModal(true)}
+          className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
         >
-          Add to Catalog
+          Add New Part
         </button>
       </div>
 
-      {/* Add Part to Stock Section */}
-      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-        <h3 className="text-xl font-semibold mb-4 text-gray-700">Add Part to Stock</h3>
+      {/* Filters and Controls */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Part Name"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-          <input
-            value={price}
-            onChange={e => setPrice(e.target.value)}
-            placeholder="Price"
-            type="number"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-          <input
-            value={category}
-            onChange={e => setCategory(e.target.value)}
-            placeholder="Category (e.g., Engine, Tires)"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-          <input
-            value={stock}
-            onChange={e => setStock(e.target.value)}
-            placeholder="Stock Quantity"
-            type="number"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
-          />
-        </div>
-        <button
-          onClick={addPartToStock}
-          className="mt-4 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
-        >
-          Add to Stock
-        </button>
-      </div>
-
-      {/* Search and Sort Section */}
-      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-        <h3 className="text-xl font-semibold mb-4 text-gray-700">Search and Sort</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input
+            type="text"
+            placeholder="Search parts..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by name or category"
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="border rounded-lg px-4 py-2"
           />
           <select
-            value={sortOption}
-            onChange={e => setSortOption(e.target.value)}
-            className="border p-3 rounded-lg text-gray-700 focus:ring focus:ring-blue-300"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="border rounded-lg px-4 py-2"
           >
-            <option value="">-- Sort By --</option>
-            <option value="name">Name</option>
-            <option value="price">Price</option>
-            <option value="stock">Stock</option>
-            <option value="category">Category</option>
+            <option value="all">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
+          <select
+            value={`${sortBy.field}-${sortBy.direction}`}
+            onChange={(e) => {
+              const [field, direction] = e.target.value.split('-');
+              setSortBy({ field, direction });
+            }}
+            className="border rounded-lg px-4 py-2"
+          >
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="price-asc">Price (Low-High)</option>
+            <option value="price-desc">Price (High-Low)</option>
+          </select>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setView('grid')}
+              className={`px-4 py-2 rounded-lg ${view === 'grid' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            >
+              Grid
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className={`px-4 py-2 rounded-lg ${view === 'list' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            >
+              List
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Parts List Section */}
-      <div className="bg-white shadow-lg rounded-lg p-6">
-        <h3 className="text-xl font-semibold mb-4 text-gray-700">Parts List</h3>
-        {filteredParts.length === 0 ? (
-          <p className="text-gray-500">No parts found.</p>
-        ) : (
-          <ul className="divide-y divide-gray-200">
-            {filteredParts.map((part, index) => (
-              <li key={index} className="py-4 flex justify-between items-center">
-                {editingIndex === index ? (
-                  <div className="flex flex-col md:flex-row gap-4 flex-1">
-                    <input
-                      value={editData.name}
-                      onChange={e => setEditData({ ...editData, name: e.target.value })}
-                      placeholder="Part Name"
-                      className="border p-2 rounded-lg text-gray-700 focus:ring focus:ring-blue-300 flex-1"
-                    />
-                    <input
-                      value={editData.price}
-                      onChange={e => setEditData({ ...editData, price: parseFloat(e.target.value) || '' })}
-                      placeholder="Price"
-                      type="number"
-                      className="border p-2 rounded-lg text-gray-700 focus:ring focus:ring-blue-300 flex-1"
-                    />
-                    <input
-                      value={editData.category}
-                      onChange={e => setEditData({ ...editData, category: e.target.value })}
-                      placeholder="Category"
-                      className="border p-2 rounded-lg text-gray-700 focus:ring focus:ring-blue-300 flex-1"
-                    />
-                    <input
-                      value={editData.stock}
-                      onChange={e => setEditData({ ...editData, stock: parseInt(e.target.value, 10) || '' })}
-                      placeholder="Stock"
-                      type="number"
-                      className="border p-2 rounded-lg text-gray-700 focus:ring focus:ring-blue-300 flex-1"
-                    />
-                    <button
-                      onClick={saveEdit}
-                      className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
-                    >
-                      Save
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{part.name}</p>
-                    <p className="text-sm text-gray-500">Price: ${part.price.toFixed(2)}</p>
-                    <p className="text-sm text-gray-500">Category: {part.category || 'Uncategorized'}</p>
-                    <p className={`text-sm font-medium ${part.stock <= 5 ? 'text-red-500' : 'text-gray-500'}`}>
-                      Stock: {part.stock} {part.stock <= 5 && '(Low Stock)'}
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  {editingIndex !== index && (
-                    <button
-                      onClick={() => startEditing(index)}
-                      className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition"
-                    >
-                      Edit
-                    </button>
-                  )}
+      {/* Parts Grid/List */}
+      {isLoading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading parts...</p>
+        </div>
+      ) : (
+        <div className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-3 gap-6' : 'space-y-4'}>
+          {filteredParts.map(part => (
+            <div key={part.id} className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition">
+              <div className="flex justify-between items-start">
+                <h3 className="text-lg font-semibold text-gray-800">{part.name}</h3>
+                <span className="text-lg font-bold text-blue-600">${part.price}</span>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">{part.description}</p>
+              <div className="mt-4 flex justify-between items-center">
+                <span className="px-3 py-1 bg-gray-100 rounded-full text-sm">
+                  {part.category}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm ${part.stock <= part.minStock ? 'text-red-500' : 'text-green-500'}`}>
+                    Stock: {part.stock}
+                  </span>
                   <button
-                    onClick={() => deletePart(index)}
-                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+                    onClick={() => handleUpdateStock(part.id, (part.stock || 0) + 1)}
+                    className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
                   >
-                    Delete
+                    +
                   </button>
                   <button
-                    onClick={() => restockPart(index, 10)}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
+                    onClick={() => handleUpdateStock(part.id, Math.max(0, (part.stock || 0) - 1))}
+                    className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
                   >
-                    Restock +10
+                    -
                   </button>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => handleDelete(part.id)}
+                  className="text-red-500 hover:text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Part Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-2xl font-bold mb-4">Add New Part</h2>
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Part Name"
+                value={newPart.name}
+                onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+                className="w-full border rounded-lg px-4 py-2"
+              />
+              <input
+                type="number"
+                placeholder="Price"
+                value={newPart.price}
+                onChange={(e) => setNewPart({ ...newPart, price: e.target.value })}
+                className="w-full border rounded-lg px-4 py-2"
+              />
+              <select
+                value={newPart.category}
+                onChange={(e) => setNewPart({ ...newPart, category: e.target.value })}
+                className="w-full border rounded-lg px-4 py-2"
+              >
+                <option value="">Select Category</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                placeholder="Initial Stock"
+                value={newPart.stock}
+                onChange={(e) => setNewPart({ ...newPart, stock: e.target.value })}
+                className="w-full border rounded-lg px-4 py-2"
+              />
+              <textarea
+                placeholder="Description"
+                value={newPart.description}
+                onChange={(e) => setNewPart({ ...newPart, description: e.target.value })}
+                className="w-full border rounded-lg px-4 py-2"
+              />
+              <input
+                type="number"
+                placeholder="Minimum Stock Alert"
+                value={newPart.minStock}
+                onChange={(e) => setNewPart({ ...newPart, minStock: e.target.value })}
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div className="flex justify-end gap-4 mt-6">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddPart}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                Add Part
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
