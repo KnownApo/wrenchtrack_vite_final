@@ -88,9 +88,12 @@ export default function InvoiceHistoryScreen() {
 
     if (window.confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) {
       try {
-        const invoiceRef = doc(db, 'users', user.uid, 'invoices', invoiceId);
-        await deleteDoc(invoiceRef);
+        console.log(`Attempting to delete invoice with ID: ${invoiceId}`); // Debugging log
+        const invoiceRef = doc(db, 'users', user.uid, 'invoices', invoiceId); // Correct Firestore path
+        await deleteDoc(invoiceRef); // Delete the invoice from Firestore
+        console.log(`Invoice with ID: ${invoiceId} deleted successfully from Firestore.`); // Debugging log
 
+        // Update the local state to remove the deleted invoice
         setInvoices((prev) => prev.filter((inv) => inv.id !== invoiceId));
         alert('✅ Invoice deleted successfully.');
       } catch (error) {
@@ -150,7 +153,7 @@ export default function InvoiceHistoryScreen() {
             {invoices.map((invoice) => (
               <div key={invoice.id} className="bg-white shadow-lg rounded-3xl p-6 hover:shadow-xl transition">
                 <h3 className="text-xl font-bold text-blue-700 mb-2">{invoice.title}</h3>
-                <p className="text-sm text-gray-500">Invoice ID: <span className="font-medium">{invoice.invoiceId || 'N/A'}</span></p>
+                <p className="text-sm text-gray-500">Invoice ID: <span className="font-medium">{invoice.id || 'N/A'}</span></p>
                 <p className="text-sm text-gray-500">PO: <span className="font-medium">{invoice.po}</span></p>
                 <p className="text-sm text-gray-500">Total: <span className="font-medium">${invoice.total.toFixed(2)}</span></p>
                 <p className="text-sm text-gray-500">Customer: <span className="font-medium">{invoice.customer?.name || 'N/A'}</span></p>

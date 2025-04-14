@@ -42,32 +42,47 @@ export default function CustomersScreen() {
   };
 
   const saveCustomer = async () => {
-    if (!input.trim()) return;
-
-    setCustomer(input);
-
-    if (user) {
-      const customersRef = collection(db, 'users', user.uid, 'customers');
-      const newCustomer = {
-        name: input,
-        email,
-        phone,
-        address,
-        company,
-        notes,
-        preferredContact,
-        createdAt: new Date(),
-      };
-      await addDoc(customersRef, newCustomer);
+    if (!input.trim()) {
+      alert('Customer name is required.');
+      return;
     }
 
-    setInput('');
-    setEmail('');
-    setPhone('');
-    setAddress('');
-    setCompany('');
-    setNotes('');
-    setPreferredContact('email');
+    if (user) {
+      try {
+        console.log('Saving customer to Firestore...'); // Debugging log
+        const customersRef = collection(db, 'users', user.uid, 'customers');
+        const newCustomer = {
+          name: input,
+          email,
+          phone,
+          address,
+          company,
+          notes,
+          preferredContact,
+          createdAt: new Date(),
+        };
+        await addDoc(customersRef, newCustomer);
+        console.log('Customer saved successfully:', newCustomer); // Debugging log
+
+        // Add the new customer to the filtered customers list
+        setFilteredCustomers((prev) => [...prev, { id: newCustomer.id, ...newCustomer }]);
+
+        // Reset the input fields
+        setInput('');
+        setEmail('');
+        setPhone('');
+        setAddress('');
+        setCompany('');
+        setNotes('');
+        setPreferredContact('email');
+        alert('✅ Customer saved successfully.');
+      } catch (error) {
+        console.error('Error saving customer:', error);
+        alert('❌ Failed to save customer. Please try again later.');
+      }
+    } else {
+      alert('❌ User is not authenticated.');
+    }
   };
 
   return (

@@ -139,7 +139,49 @@ export default function InvoiceBuilderScreen() {
   const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
-  // Reset the invoice
+  // Load persisted invoice state from sessionStorage
+  useEffect(() => {
+    const savedInvoice = sessionStorage.getItem('invoiceState');
+    if (savedInvoice) {
+      try {
+        const parsedInvoice = JSON.parse(savedInvoice);
+        console.log('Loaded invoice state from sessionStorage:', parsedInvoice); // Debugging log
+        setInvoiceTitle(parsedInvoice.invoiceTitle || '');
+        setPoNumber(parsedInvoice.poNumber || '');
+        setSelectedCustomer(parsedInvoice.selectedCustomer || '');
+        setSelectedParts(parsedInvoice.selectedParts || []);
+        setInvoiceDate(parsedInvoice.invoiceDate || new Date().toISOString().split('T')[0]);
+        setDueDate(parsedInvoice.dueDate || '');
+        setNotes(parsedInvoice.notes || '');
+        setSignatureURL(parsedInvoice.signatureURL || '');
+      } catch (error) {
+        console.error('Error parsing saved invoice state:', error);
+        sessionStorage.removeItem('invoiceState'); // Clear corrupted state
+      }
+    }
+  }, []);
+
+  // Persist invoice state to sessionStorage whenever it changes
+  useEffect(() => {
+    const invoiceState = {
+      invoiceTitle,
+      poNumber,
+      selectedCustomer,
+      selectedParts,
+      invoiceDate,
+      dueDate,
+      notes,
+      signatureURL,
+    };
+    try {
+      sessionStorage.setItem('invoiceState', JSON.stringify(invoiceState));
+      console.log('Saved invoice state to sessionStorage:', invoiceState); // Debugging log
+    } catch (error) {
+      console.error('Error saving invoice state:', error);
+    }
+  }, [invoiceTitle, poNumber, selectedCustomer, selectedParts, invoiceDate, dueDate, notes, signatureURL]);
+
+  // Reset the invoice and clear sessionStorage
   const resetInvoice = () => {
     if (window.confirm('Are you sure you want to reset the invoice? This action cannot be undone.')) {
       setInvoiceTitle('');
@@ -149,7 +191,9 @@ export default function InvoiceBuilderScreen() {
       setInvoiceDate(new Date().toISOString().split('T')[0]);
       setDueDate('');
       setNotes('');
-      setSignatureURL('');
+      setSignatureURL(''); // Clear the signature
+      sessionStorage.removeItem('invoiceState'); // Clear session storage
+      sessionStorage.removeItem('signatureURL'); // Clear signature from session storage
       alert('Invoice has been reset.');
     }
   };
@@ -190,6 +234,13 @@ export default function InvoiceBuilderScreen() {
 
       await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceData);
       alert('✅ Invoice saved successfully.');
+
+      // Clear the signature after saving
+      console.log('Clearing signature after saving...');
+      setSignatureURL('');
+      sessionStorage.removeItem('signatureURL');
+      console.log('Signature cleared.');
+
       resetInvoice(); // Reset the invoice after saving
     } catch (error) {
       console.error('Error saving invoice:', error);
@@ -236,6 +287,13 @@ export default function InvoiceBuilderScreen() {
         }
       })
       .save()
+      .then(() => {
+        // Clear the signature after downloading
+        console.log('Clearing signature after downloading...');
+        setSignatureURL('');
+        sessionStorage.removeItem('signatureURL');
+        console.log('Signature cleared.');
+      })
       .catch((error) => {
         console.error('Error generating PDF:', error);
         alert('❌ Failed to download invoice.');
@@ -259,6 +317,34 @@ export default function InvoiceBuilderScreen() {
       alert('❌ Invoice not found.');
     }
   };
+
+  // Fetch the saved signature when the component loads
+  useEffect(() => {
+    if (!user) return;
+
+    const loadSignature = async () => {
+      try {
+        const userSettingsRef = doc(db, 'users', user.uid, 'settings', 'signature');
+        const signatureSnap = await getDoc(userSettingsRef);
+
+        if (signatureSnap.exists()) {
+          const data = signatureSnap.data();
+          setSignatureURL(data.signatureURL || ''); // Load the saved signature URL
+        }
+      } catch (error) {
+        console.error('Error loading signature:', error);
+      }
+    };
+
+    loadSignature();
+
+    // Clear the signature when the component unmounts
+    return () => {
+      console.log('Clearing signature on unmount...');
+      setSignatureURL('');
+      sessionStorage.removeItem('signatureURL');
+    };
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">

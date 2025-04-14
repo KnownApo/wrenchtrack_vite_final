@@ -1,44 +1,82 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import Dashboard from './DashboardScreen';
+import Customers from './CustomersScreen';
+import JobTimer from './JobTimerScreen';
+import PartsCatalog from './PartsScreen';
+import InvoiceBuilder from './InvoiceBuilderScreen';
+import InvoiceHistory from './InvoiceHistoryScreen';
+import SignatureScreen from './SignatureScreen';
+import Payments from './PaymentScreen';
+import Settings from './SettingsScreen';
 
 export default function HomeScreen() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-10">
-      <header className="text-center mb-16">
-        <h1 className="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-6">
-          🔧 WrenchTrack
-        </h1>
-        <p className="text-gray-700 text-lg">
-          Streamline your workflow — manage customers, track jobs, log parts, and generate invoices effortlessly.
-        </p>
-      </header>
+  const [activePage, setActivePage] = useState('dashboard'); // Track the active page
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-        {[
-          { to: '/dashboard', label: 'Dashboard', desc: 'View overall stats & insights', icon: '📊' },
-          { to: '/customers', label: 'Customers', desc: 'Manage profiles & job history', icon: '👥' },
-          { to: '/job', label: 'Job Timer', desc: 'Track labor time easily', icon: '⏱️' },
-          { to: '/parts', label: 'Parts Catalog', desc: 'Manage job materials', icon: '🛠️' },
-          { to: '/invoice', label: 'Invoices', desc: 'Generate PDF invoices', icon: '📄' },
-          { to: '/invoicehistory', label: 'Invoice History', desc: 'View and edit past invoices', icon: '📜' },
-          { to: '/signature', label: 'Signatures', desc: 'Capture approval', icon: '✍️' },
-          { to: '/payment', label: 'Payments', desc: 'Mark jobs as paid', icon: '💳' },
-          { to: '/settings', label: 'Settings', desc: 'Manage settings', icon: '⚙️' },
-        ].map((link) => (
-          <Link
-            key={link.to}
-            to={link.to}
-            className="group block bg-white border border-gray-200 rounded-3xl p-8 shadow-lg hover:shadow-xl transition transform hover:-translate-y-1 hover:bg-gradient-to-r hover:from-blue-100 hover:via-purple-100 hover:to-pink-100"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <span className="text-5xl">{link.icon}</span>
-              <h2 className="text-2xl font-bold text-blue-700 group-hover:text-blue-800 transition">
-                {link.label}
-              </h2>
+  const pages = [
+    { key: 'dashboard', label: 'Dashboard', icon: '📊', component: <Dashboard /> },
+    { key: 'customers', label: 'Customers', icon: '👥', component: <Customers /> },
+    { key: 'job', label: 'Job Timer', icon: '⏱️', component: <JobTimer /> },
+    { key: 'parts', label: 'Parts Catalog', icon: '🛠️', component: <PartsCatalog /> },
+    { key: 'invoice', label: 'Invoices', icon: '📄', component: <InvoiceBuilder /> },
+    { key: 'invoicehistory', label: 'Invoice History', icon: '📜', component: <InvoiceHistory /> },
+    { key: 'signature', label: 'Signatures', icon: '✍️', component: <SignatureScreen /> },
+    { key: 'payment', label: 'Payments', icon: '💳', component: <Payments /> },
+    { key: 'settings', label: 'Settings', icon: '⚙️', component: <Settings /> },
+  ];
+
+  const activePageComponent = pages.find((page) => page.key === activePage)?.component;
+
+  return (
+    <div className="flex min-h-screen bg-gray-100">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white shadow-lg overflow-y-auto">
+        <div className="p-6">
+          <h1 className="text-3xl font-extrabold text-blue-600 mb-8">🔧 WrenchTrack</h1>
+          <nav className="space-y-4">
+            {pages.map((page) => (
+              <button
+                key={page.key}
+                onClick={() => setActivePage(page.key)}
+                className={`flex items-center gap-4 p-3 rounded-lg hover:bg-blue-50 transition w-full text-left ${
+                  activePage === page.key ? 'bg-blue-100' : ''
+                }`}
+              >
+                <span className="text-2xl">{page.icon}</span>
+                <span className="text-lg font-medium text-gray-700">{page.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white shadow p-6 flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-800">Welcome to WrenchTrack</h2>
+          <div className="flex items-center gap-4">
+            <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+              Upgrade Plan
+            </button>
+            <div className="flex items-center gap-2">
+              <img
+                src="https://via.placeholder.com/40"
+                alt="User Avatar"
+                className="w-10 h-10 rounded-full"
+              />
+              <span className="text-gray-700 font-medium">John Doe</span>
             </div>
-            <p className="text-gray-600 text-sm">{link.desc}</p>
-          </Link>
-        ))}
+          </div>
+        </header>
+
+        {/* Dynamic Content Area */}
+        <main className="p-6 overflow-y-auto">
+          {activePageComponent || (
+            <div className="text-center text-gray-500">
+              <p>Select a page from the sidebar to get started.</p>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
