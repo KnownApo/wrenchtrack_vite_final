@@ -51,12 +51,17 @@ class FirebaseService {
 
   async uploadFile(file, path) {
     try {
-      const storageRef = ref(this.storage, `users/${this.auth.currentUser.uid}/${path}`);
-      await uploadBytes(storageRef, file);
-      return await getDownloadURL(storageRef);
+      const storageRef = ref(this.storage, path);
+      const metadata = {
+        contentType: file.type,
+        cacheControl: 'public,max-age=3600'
+      };
+      
+      await uploadBytes(storageRef, file, metadata);
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
     } catch (error) {
       console.error('Error uploading file:', error);
-      toast.error('Failed to upload file');
       throw error;
     }
   }

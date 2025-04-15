@@ -1,9 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import './styles/modern.css'; // Import custom modern styles
 import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { AuthProvider } from './AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import './styles/modern.css';
+import 'react-toastify/dist/ReactToastify.css';
 
 import AuthGuard from './components/AuthGuard.jsx';
 import HomeScreen from './screens/HomeScreen';
@@ -21,35 +23,41 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import InvoiceDetailScreen from './screens/InvoiceDetailScreen';
 
-export default function App() {
+function App() {
   return (
-    <ErrorBoundary>
-      <Router>
-        <ToastContainer position="top-right" autoClose={3000} />
-        <div className="font-sans antialiased">
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/register" element={<RegisterScreen />} />
+    <AuthProvider>
+      <ThemeProvider>
+        <ErrorBoundary>
+          <Router>
+            <ToastContainer position="top-right" autoClose={3000} />
+            <div className="font-sans antialiased">
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<LoginScreen />} />
+                <Route path="/register" element={<RegisterScreen />} />
 
-            {/* Protected Routes */}
-            <Route path="/" element={<AuthGuard><HomeScreen /></AuthGuard>} />
-            <Route path="/dashboard" element={<AuthGuard><DashboardScreen /></AuthGuard>} />
-            <Route path="/customers" element={<AuthGuard><CustomersScreen /></AuthGuard>} />
-            <Route path="/history" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
-            <Route path="/job" element={<AuthGuard><JobTimerScreen /></AuthGuard>} />
-            <Route path="/parts" element={<AuthGuard><PartsScreen /></AuthGuard>} />
-            <Route path="/invoice" element={<AuthGuard><InvoiceBuilderScreen /></AuthGuard>} />
-            <Route path="/invoicehistory" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
-            <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
-            <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
+                {/* Protected Routes */}
+                <Route path="/" element={<AuthGuard><HomeScreen /></AuthGuard>} />
+                <Route path="/dashboard" element={<AuthGuard><DashboardScreen /></AuthGuard>} />
+                <Route path="/customers" element={<AuthGuard><CustomersScreen /></AuthGuard>} />
+                <Route path="/history" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
+                <Route path="/job" element={<AuthGuard><JobTimerScreen /></AuthGuard>} />
+                <Route path="/parts" element={<AuthGuard><PartsScreen /></AuthGuard>} />
+                <Route path="/invoice" element={<AuthGuard><InvoiceBuilderScreen /></AuthGuard>} />
+                <Route path="/invoicehistory" element={<AuthGuard><InvoiceHistoryScreen /></AuthGuard>} />
+                <Route path="/signature" element={<AuthGuard><SignatureScreen /></AuthGuard>} />
+                <Route path="/payment" element={<AuthGuard><PaymentScreen /></AuthGuard>} />
                 <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
                 <Route path="/customerhistory" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
                 <Route path="/invoices/:id" element={<AuthGuard><InvoiceDetailScreen /></AuthGuard>} />
               </Routes>
             </div>
-      </Router>
-    </ErrorBoundary>
+          </Router>
+        </ErrorBoundary>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
+
+export default App;
 
