@@ -7,17 +7,16 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   useEffect(() => {
-    // Apply theme class to document root
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(theme);
+    localStorage.setItem('theme', theme);
   }, [theme]);
 
   const toggleTheme = (newTheme) => {
     setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
   };
 
   return (

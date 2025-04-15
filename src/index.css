@@ -24,6 +24,10 @@
   @apply text-gray-300;
 }
 
+.dark .text-gray-600 {
+  @apply text-gray-400;
+}
+
 .dark .text-gray-500 {
   @apply text-gray-400;
 }
@@ -33,9 +37,39 @@
 }
 
 .dark .bg-gray-50 {
-  @apply bg-gray-700;
+  @apply bg-gray-800;
+}
+
+.dark .bg-gray-100 {
+  @apply bg-gray-800;
 }
 
 .dark .shadow-lg {
-  @apply shadow-gray-900;
+  @apply shadow-gray-900/50;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  @apply hover:bg-gray-700;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  @apply hover:bg-gray-700;
+}
+
+.dark input, 
+.dark select, 
+.dark textarea {
+  @apply bg-gray-700 border-gray-600 text-gray-100;
+}
+
+.dark .from-blue-50 {
+  @apply from-gray-900;
+}
+
+.dark .via-purple-50 {
+  @apply via-gray-800;
+}
+
+.dark .to-pink-50 {
+  @apply to-gray-900;
 }

@@ -1,96 +1,113 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { doc, setDoc } from 'firebase/firestore'; // Use setDoc to create or update the document
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { toast } from 'react-toastify';
 
 export default function SignatureScreen() {
-  const canvasRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const startDrawing = (e) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    ctx.beginPath();
-    ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-    setIsDrawing(true);
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File size must be less than 2MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPreview(reader.result);
+    reader.readAsDataURL(file);
   };
 
-  const draw = (e) => {
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-    ctx.stroke();
-  };
+  const handleSave = async () => {
+    if (!selectedFile) {
+      toast.error('Please select a signature image');
+      return;
+    }
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const handleSaveSignature = async () => {
-    const canvas = canvasRef.current;
-    const signatureURL = canvas.toDataURL('image/png');
-
+    setLoading(true);
     try {
-      if (!user) {
-        alert('User is not authenticated.');
-        return;
-      }
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result;
+        const signatureRef = doc(db, 'users', user.uid, 'settings', 'signature');
+        await setDoc(signatureRef, {
+          signatureURL: base64Data,
+          fileName: selectedFile.name,
+          updatedAt: new Date()
+        }, { merge: true });
 
-      const userSettingsRef = doc(db, 'users', user.uid, 'settings', 'signature'); // Correct document reference
-      await setDoc(userSettingsRef, { signatureURL }, { merge: true }); // Merge to avoid overwriting other fields
-      alert('✅ Signature saved successfully.');
-      navigate('/invoice'); // Navigate back to the Invoice Builder screen
+        toast.success('Signature saved successfully');
+        navigate('/invoice');
+      };
+      reader.readAsDataURL(selectedFile);
     } catch (error) {
       console.error('Error saving signature:', error);
-      alert('❌ Failed to save signature.');
+      toast.error('Failed to save signature');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Back to Invoice Builder Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/invoice')}
-            className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
-          >
-            ← Back to Invoice Builder
-          </button>
+        <button
+          onClick={() => navigate('/invoice')}
+          className="mb-6 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+        >
+          ← Back to Invoice
+        </button>
+
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <h1 className="text-3xl font-bold text-center mb-8">Upload Signature Image</h1>
+          
+          <div className="space-y-6">
+            {preview ? (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                <img src={preview} alt="Signature preview" className="max-h-64 mx-auto" />
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
+                <div className="text-gray-500">No image selected</div>
+              </div>
+            )}
+
+            <div className="flex flex-col items-center gap-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              
+              <button
+                onClick={handleSave}
+                disabled={!selectedFile || loading}
+                className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Saving...' : 'Save Signature'}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <h1 className="text-5xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 mb-12">
-          ✍️ Capture Signature
-        </h1>
-        <div className="bg-white shadow-lg rounded-3xl p-8">
-          <canvas
-            ref={canvasRef}
-            width={600}
-            height={300}
-            className="border rounded-lg shadow-md w-full"
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-          ></canvas>
-          <div className="flex justify-center gap-6 mt-6">
-            <button
-              onClick={handleSaveSignature}
-              className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-md hover:bg-green-600 transition"
-            >
-              Save Signature
-            </button>
-            <button
-              onClick={() => navigate('/invoice')}
-              className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition"
-            >
-              Cancel
-            </button>
-          </div>
+        <div className="mt-6 text-center text-gray-600">
+          <p>Upload a clear image of your signature (Max 2MB)</p>
+          <p>Supported formats: JPG, PNG, GIF</p>
         </div>
       </div>
     </div>

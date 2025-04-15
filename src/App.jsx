@@ -50,7 +50,7 @@ function App() {
                 <Route path="/settings" element={<AuthGuard><SettingsScreen /></AuthGuard>} />
                 <Route path="/customerhistory" element={<AuthGuard><CustomerHistoryScreen /></AuthGuard>} />
                 <Route path="/invoices/:id" element={<AuthGuard><InvoiceDetailScreen /></AuthGuard>} />
-              </Routes>
+                              </Routes>
             </div>
           </Router>
         </ErrorBoundary>

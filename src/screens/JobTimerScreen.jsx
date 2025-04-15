@@ -1,81 +1,114 @@
-import React, { useEffect, useState, useContext } from 'react';
-import { JobLogContext } from '../context/JobLogContext';
+import React, { useState, useEffect, useCallback } from 'react';
+import debounce from 'lodash/debounce';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../AuthContext';
+import { toast } from 'react-toastify';
 
 export default function JobTimerScreen() {
-  const [isRunning, setIsRunning] = useState(() => JSON.parse(localStorage.getItem('isRunning')) || false);
-  const [elapsed, setElapsed] = useState(() => parseInt(localStorage.getItem('elapsed'), 10) || 0);
-  const { currentInvoiceId } = useContext(JobLogContext); // Access JobLogContext
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [laborGuide, setLaborGuide] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    let interval = null;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setElapsed((prev) => prev + 1);
-      }, 1000);
-    } else if (!isRunning && elapsed !== 0) {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning]);
+  // Add debounced search function
+  const debouncedSearch = useCallback(
+    debounce(async (term) => {
+      if (!term || term.length < 2) {
+        setLaborGuide([]);
+        return;
+      }
 
-  // Persist elapsed time to localStorage
-  useEffect(() => {
-    localStorage.setItem('elapsed', elapsed);
-  }, [elapsed]);
+      setLoading(true);
+      try {
+        // Simplified query without array-contains
+        const q = query(collection(db, 'laborGuide'));
+        const snapshot = await getDocs(q);
+        const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // Persist running state to localStorage
-  useEffect(() => {
-    localStorage.setItem('isRunning', JSON.stringify(isRunning));
-  }, [isRunning]);
+        // Client-side filtering
+        const searchTerms = term.toLowerCase().split(' ').filter(t => t.length > 0);
+        const filteredResults = results.filter(job => {
+          const jobText = `${job.name} ${job.description}`.toLowerCase();
+          return searchTerms.every(term => jobText.includes(term));
+        });
 
-  const resetTimer = () => {
-    setElapsed(0);
-    setIsRunning(false);
-    localStorage.removeItem('elapsed');
-    localStorage.removeItem('isRunning');
+        if (filteredResults.length === 0) {
+          toast.info('No matching jobs found');
+        }
+        
+        setLaborGuide(filteredResults);
+      } catch (error) {
+        console.error('Error searching labor guide:', error);
+        toast.error('Search failed. Please check your connection.');
+      } finally {
+        setLoading(false);
+      }
+    }, 500),
+    []
+  );
+
+  // Update search handler
+  const handleSearch = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    debouncedSearch(term);
   };
 
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  const handleJobSelect = (job) => {
+    setSelectedJob(job);
+    // You could add this to your invoice or job context
+    toast.success(`Added ${job.name} - ${job.standardHours} hours`);
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-200">
-      <div className="bg-white shadow-lg rounded-3xl p-8 max-w-md w-full">
-        <h2 className="text-3xl font-extrabold text-center text-blue-600 mb-6">⏱️ Job Timer</h2>
-        <div className="relative bg-gradient-to-r from-blue-500 to-purple-500 text-white text-5xl font-mono font-bold rounded-2xl p-6 text-center shadow-inner mb-6">
-          {formatTime(elapsed)}
-          <div className="absolute inset-0 bg-black bg-opacity-10 rounded-2xl pointer-events-none"></div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        <button
+          onClick={() => navigate('/invoice')}
+          className="mb-6 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
+        >
+          ← Back to Invoice
+        </button>
+
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <h1 className="text-3xl font-bold text-center mb-8">Labor Guide</h1>
+
+          <div className="space-y-6">
+            <div className="flex gap-4">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={handleSearch}
+                placeholder="Search operations (minimum 2 characters)..."
+                className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {loading ? (
+              <div className="text-center py-8">Loading...</div>
+            ) : (
+              <div className="grid gap-4">
+                {laborGuide.map(job => (
+                  <div
+                    key={job.id}
+                    className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleJobSelect(job)}
+                  >
+                    <h3 className="font-bold">{job.name}</h3>
+                    <p className="text-gray-600">{job.description}</p>
+                    <div className="mt-2 text-blue-600">
+                      Standard Time: {job.standardHours} hours
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
-          <div
-            className="bg-blue-500 h-2 rounded-full"
-            style={{ width: `${(elapsed % 60) * 1.67}%` }} // Example progress bar logic
-          ></div>
-        </div>
-        <div className="flex justify-center gap-4">
-          <button
-            onClick={() => setIsRunning(!isRunning)}
-            className={`px-6 py-3 rounded-lg text-white font-semibold transition ${
-              isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-            }`}
-          >
-            {isRunning ? 'Pause' : 'Start'}
-          </button>
-          <button
-            onClick={resetTimer}
-            className="px-6 py-3 rounded-lg bg-gray-500 hover:bg-gray-600 text-white font-semibold transition"
-          >
-            Reset
-          </button>
-        </div>
-        {currentInvoiceId && (
-          <p className="text-sm text-gray-500 text-center mt-4">
-            Tracking time for Invoice ID: <span className="font-medium text-gray-700">{currentInvoiceId}</span>
-          </p>
-        )}
       </div>
     </div>
   );
