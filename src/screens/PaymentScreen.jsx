@@ -60,15 +60,36 @@ export default function PaymentScreen() {
 
     setProcessing(true);
     try {
-      // Update invoice in Firestore
+      const invoice = invoices.find(inv => inv.id === selectedInvoice);
+      const total = parseFloat(amount);
+      
       const invoiceRef = doc(db, 'users', user.uid, 'invoices', selectedInvoice);
       await updateDoc(invoiceRef, {
         paid: true,
-        paidAmount: parseFloat(amount),
+        paidAmount: total,
         paymentMethod: method,
         paidAt: new Date(),
-        status: 'paid'
+        status: 'paid',
+        completed: true,
+        completedAt: new Date(),
+        transaction: {
+          amount: total,
+          method: method,
+          date: new Date(),
+          status: 'completed'
+        },
+        total: total, // Ensure total is set
+        balance: 0,
+        updatedAt: new Date()
       });
+
+      // Update invoice in state
+      const updatedInvoices = invoices.map(inv => 
+        inv.id === selectedInvoice 
+          ? { ...inv, paid: true, status: 'paid', total: total }
+          : inv
+      );
+      setInvoices(updatedInvoices);
 
       setPaid(true);
       setDone(true);
@@ -76,6 +97,7 @@ export default function PaymentScreen() {
         navigate('/invoicehistory');
       }, 2000);
     } catch (err) {
+      console.error('Payment error:', err);
       setError('Failed to process payment');
     } finally {
       setProcessing(false);
