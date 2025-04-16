@@ -51,7 +51,10 @@ export default function SignatureScreen() {
         }, { merge: true });
 
         toast.success('Signature saved successfully');
-        navigate('/invoice');
+        
+        // Use navigate method directly to ensure we go to the correct screen
+        // without any looparounds
+        navigate('/invoice', { replace: true });
       };
       reader.readAsDataURL(selectedFile);
     } catch (error) {
@@ -66,7 +69,8 @@ export default function SignatureScreen() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
       <div className="max-w-4xl mx-auto">
         <button
-          onClick={() => navigate('/invoice')}
+          onClick={() => navigate('/invoice', { replace: true })}
+          type="button"
           className="mb-6 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
         >
           ← Back to Invoice

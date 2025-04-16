@@ -1,44 +1,32 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    port: 5173,
-    strictPort: true,
-    host: true,
-    hmr: {
-      port: 5173,
-      protocol: 'ws',
-      host: 'localhost',
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
     },
-    watch: {
-      usePolling: true
-    }
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage']
-        }
-      }
-    }
   },
+  server: {
+    port: 5173,
+    host: true,
+    strictPort: true,
+  },
+  // Set app.jsx as the entry point instead of main.jsx
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom'],
-    esbuildOptions: {
-      mainFields: ['module', 'main'],
-      resolveExtensions: ['.js', '.jsx']
-    }
+    include: ['react', 'react-dom'],
   },
-  resolve: {
-    alias: {
-      '@': '/src'
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+      },
     },
-    mainFields: ['browser', 'module', 'main']
-  }
+  },
 })

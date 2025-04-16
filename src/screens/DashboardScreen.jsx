@@ -89,10 +89,12 @@ export default function DashboardScreen() {
           statsData.totalBilled += invoiceTotal;
           statsData.invoiceTotals.push(invoiceTotal);
 
-          // Handle payment status - check multiple flags
+          // Update payment status logic to include completed invoices
           const isPaid = Boolean(
             data.paid === true || 
             data.status === 'paid' || 
+            data.status === 'completed' ||  // Consider completed as paid
+            data.completed === true ||      // Also check completed flag
             (data.paidAmount && data.paidAmount > 0)
           );
 
@@ -150,18 +152,44 @@ export default function DashboardScreen() {
           }]
         });
 
-        // Set recent invoices
+        // Set recent invoices - Fix price calculation
         const recentOnes = invoiceSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            total: doc.data().parts ? 
-              doc.data().parts.reduce((sum, part) => sum + (parseFloat(part.price) || 0), 0) :
-              parseFloat(doc.data().total) || 0
-          }))
-          .sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds)
+          .map(doc => {
+            const data = doc.data();
+            // Correctly calculate total from invoice data
+            let invoiceTotal = 0;
+            
+            // Try different ways to get the total
+            if (data.total) {
+              // Use total directly if it exists
+              invoiceTotal = parseFloat(data.total);
+            } else if (data.parts && Array.isArray(data.parts)) {
+              // Calculate from parts if available
+              invoiceTotal = data.parts.reduce((sum, part) => {
+                const cost = parseFloat(part.cost) || 0;
+                const quantity = parseInt(part.quantity) || 1;
+                return sum + (cost * quantity);
+              }, 0);
+            } else if (data.subtotal) {
+              // Fall back to subtotal if parts calculation not possible
+              invoiceTotal = parseFloat(data.subtotal);
+            }
+            
+            return {
+              id: doc.id,
+              ...data,
+              total: invoiceTotal
+            };
+          })
+          .sort((a, b) => {
+            // Sort by timestamp if available, otherwise by createdAt date
+            const timeA = a.timestamp || (a.createdAt?.toDate?.() || new Date(a.createdAt || 0)).getTime();
+            const timeB = b.timestamp || (b.createdAt?.toDate?.() || new Date(b.createdAt || 0)).getTime();
+            return timeB - timeA;
+          })
           .slice(0, 5);
 
+        console.log("Recent invoices with totals:", recentOnes); // Debug log
         setRecentInvoices(recentOnes);
 
       } catch (error) {
@@ -183,12 +211,12 @@ export default function DashboardScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard Analytics</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Analytics</h1>
           <select
-            className="border rounded-md p-2"
+            className="border rounded-md p-2 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
             value={timeFilter}
             onChange={(e) => setTimeFilter(e.target.value)}
           >
@@ -199,95 +227,131 @@ export default function DashboardScreen() {
           </select>
         </div>
 
+        {/* Stats Cards - Revert to previous UI style */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-sm font-medium text-gray-500">Total Invoices</h2>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.totalInvoices}</p>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Invoices</h2>
+            <p className="mt-2 text-3xl font-semibold text-gray-900 dark:text-white">{stats.totalInvoices}</p>
           </div>
           
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-sm font-medium text-gray-500">Total Revenue</h2>
-            <p className="mt-2 text-3xl font-semibold text-green-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Revenue</h2>
+            <p className="mt-2 text-3xl font-semibold text-green-600 dark:text-green-400">
               ${stats.totalBilled.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-sm font-medium text-gray-500">Average Invoice</h2>
-            <p className="mt-2 text-3xl font-semibold text-blue-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Average Invoice</h2>
+            <p className="mt-2 text-3xl font-semibold text-blue-600 dark:text-blue-400">
               ${stats.averageInvoice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-sm font-medium text-gray-500">Unpaid Amount</h2>
-            <p className="mt-2 text-3xl font-semibold text-red-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Unpaid Amount</h2>
+            <p className="mt-2 text-3xl font-semibold text-red-600 dark:text-red-400">
               ${stats.unpaidAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
-            <p className="mt-1 text-sm text-gray-500">{stats.unpaidCount} invoices</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{stats.unpaidCount} invoices</p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-sm font-medium text-gray-500">Paid Amount</h2>
-            <p className="mt-2 text-3xl font-semibold text-green-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Paid Amount</h2>
+            <p className="mt-2 text-3xl font-semibold text-green-600 dark:text-green-400">
               ${stats.paidAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
-            <p className="mt-1 text-sm text-gray-500">{stats.paidCount} invoices</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{stats.paidCount} invoices</p>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-sm font-medium text-gray-500">Highest Invoice</h2>
-            <p className="mt-2 text-3xl font-semibold text-purple-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Highest Invoice</h2>
+            <p className="mt-2 text-3xl font-semibold text-purple-600 dark:text-purple-400">
               ${stats.highestInvoice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
           </div>
         </div>
 
         {/* Monthly Revenue Chart */}
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Monthly Revenue</h2>
+        <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold dark:text-white mb-4">Monthly Revenue</h2>
           <div className="h-[300px]">
-            <Line data={monthlyData} options={{ maintainAspectRatio: false }} />
+            <Line 
+              data={monthlyData} 
+              options={{ 
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    labels: {
+                      color: document.documentElement.classList.contains('dark') ? 'rgb(229, 231, 235)' : 'rgb(55, 65, 81)'
+                    }
+                  }
+                },
+                scales: {
+                  y: {
+                    ticks: { color: document.documentElement.classList.contains('dark') ? 'rgb(229, 231, 235)' : 'rgb(55, 65, 81)' },
+                    grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(229, 231, 235, 0.1)' : 'rgba(55, 65, 81, 0.1)' }
+                  },
+                  x: {
+                    ticks: { color: document.documentElement.classList.contains('dark') ? 'rgb(229, 231, 235)' : 'rgb(55, 65, 81)' },
+                    grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(229, 231, 235, 0.1)' : 'rgba(55, 65, 81, 0.1)' }
+                  }
+                }
+              }} 
+            />
           </div>
         </div>
 
-        {/* Recent Invoices */}
-        <div className="mt-8 bg-white rounded-lg shadow">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold">Recent Invoices</h2>
+        {/* Recent Invoices - Fix the price display and revert UI style */}
+        <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="p-6 border-b dark:border-gray-700">
+            <h2 className="text-xl font-semibold dark:text-white">Recent Invoices</h2>
           </div>
-          <div className="divide-y">
-            {recentInvoices.map(invoice => (
-              <Link 
-                key={invoice.id}
-                to={`/invoices/${invoice.id}`}
-                className="p-4 hover:bg-gray-50 flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-medium">{invoice.customer?.name || 'Unnamed Customer'}</p>
-                  <p className="text-sm text-gray-500">
-                    {invoice.createdAt?.toDate()?.toLocaleDateString() || 'No date'}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className={`px-2 py-1 rounded-full text-sm ${
-                    invoice.status === 'paid' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {invoice.status || 'pending'}
-                  </span>
-                  <span className="font-semibold">
-                    ${(invoice.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="p-4 border-t">
+          {recentInvoices.length === 0 ? (
+            <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+              No invoices found
+            </div>
+          ) : (
+            <div className="divide-y dark:divide-gray-700">
+              {recentInvoices.map(invoice => (
+                <Link 
+                  key={invoice.id}
+                  to={`/invoicehistory`}
+                  className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-medium dark:text-white">{invoice.customer?.name || 'Unnamed Customer'}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {invoice.createdAt?.toDate?.() 
+                        ? format(invoice.createdAt.toDate(), 'MMM dd, yyyy') 
+                        : invoice.createdAt instanceof Date 
+                          ? format(invoice.createdAt, 'MMM dd, yyyy')
+                          : 'No date'}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {invoice.invoiceNumber || '#' + invoice.id.substring(0, 6)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                      invoice.status === 'paid' || invoice.status === 'completed'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                    }`}>
+                      {invoice.status || 'pending'}
+                    </span>
+                    <p className="mt-1 font-semibold text-lg dark:text-white">
+                      {invoice.preferences?.currency || '$'}{Number(invoice.total).toFixed(2)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+          <div className="p-4 border-t dark:border-gray-700">
             <Link 
-              to="/invoices" 
-              className="text-blue-600 hover:text-blue-800 font-medium"
+              to="/invoicehistory" 
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
             >
               View all invoices →
             </Link>
