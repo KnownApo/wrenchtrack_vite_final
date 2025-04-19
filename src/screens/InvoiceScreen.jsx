@@ -1,24 +1,28 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
-import { collection, addDoc, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { toast } from 'react-toastify';
 import html2pdf from 'html2pdf.js';
-import { FaPlus, FaTrash, FaPrint, FaSave, FaArrowRight, FaArrowLeft, FaCheck } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaPrint, FaSave, FaArrowRight, FaArrowLeft, FaCheck, FaWrench, FaTimes } from 'react-icons/fa';
 import firebaseService from '../services/firebaseService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import LaborGuideSearch from '../components/LaborGuideSearch';
+import { setupLaborGuide } from '../utils/setupLaborGuide';
 
-export default function InvoiceScreen() {
+export default function InvoiceScreen({ isEditing }) {
   const { invoice, setInvoice, clearInvoice } = useContext(JobLogContext);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { id: invoiceId } = useParams(); // Get invoice ID from URL if editing
   const [currentStep, setCurrentStep] = useState(1);
   const [parts, setParts] = useState([]);
   const [newPart, setNewPart] = useState({ name: '', cost: '', quantity: 1 });
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLaborGuide, setShowLaborGuide] = useState(false);
   const [invoiceData, setInvoiceData] = useState({
     title: 'Service Invoice',
     date: new Date().toISOString().split('T')[0],
@@ -28,6 +32,8 @@ export default function InvoiceScreen() {
     poNumber: '',
     invoiceNumber: '',
   });
+  const [isSetting, setIsSetting] = useState(false);
+  const [existingInvoice, setExistingInvoice] = useState(null);
   
   // Generate a random alphanumeric string of specified length
   const generateRandomAlphanumeric = (length = 6) => {
@@ -85,7 +91,8 @@ export default function InvoiceScreen() {
         // Fetch customers
         const customersRef = collection(db, 'users', user.uid, 'customers');
         const customersSnapshot = await getDocs(customersRef);
-        setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setCustomers(customersData);
         
         // Fetch settings using the firebaseService
         await firebaseService.initializeUserDocuments();
@@ -124,6 +131,48 @@ export default function InvoiceScreen() {
           
           setInvoiceData(updatedInvoiceData);
         }
+
+        // If editing an existing invoice, fetch its data
+        if (isEditing && invoiceId) {
+          const invoiceDocRef = doc(db, 'users', user.uid, 'invoices', invoiceId);
+          const invoiceDoc = await getDoc(invoiceDocRef);
+          
+          if (invoiceDoc.exists()) {
+            const invoiceData = invoiceDoc.data();
+            setExistingInvoice({ id: invoiceDoc.id, ...invoiceData });
+            
+            // Set invoice data from the document
+            setInvoiceData({
+              title: invoiceData.title || 'Service Invoice',
+              date: invoiceData.date || new Date().toISOString().split('T')[0],
+              dueDate: invoiceData.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              notes: invoiceData.notes || '',
+              taxRate: invoiceData.taxRate || 0.1,
+              poNumber: invoiceData.poNumber || '',
+              invoiceNumber: invoiceData.invoiceNumber || 'DRAFT',
+            });
+            
+            // Set parts
+            if (invoiceData.parts && Array.isArray(invoiceData.parts)) {
+              setParts(invoiceData.parts);
+            }
+            
+            // Set customer
+            if (invoiceData.customer) {
+              // Find the customer in our loaded customers
+              const customer = customersData.find(c => c.id === invoiceData.customer.id);
+              if (customer) {
+                setSelectedCustomer(customer);
+              } else {
+                // If customer not found in our list, use the one from the invoice
+                setSelectedCustomer(invoiceData.customer);
+              }
+            }
+          } else {
+            toast.error('Invoice not found');
+            navigate('/invoicehistory');
+          }
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         toast.error('Failed to load data');
@@ -133,7 +182,7 @@ export default function InvoiceScreen() {
     };
     
     fetchData();
-  }, [user]);
+  }, [user, isEditing, invoiceId, navigate]);
   
   // Update invoice number when PO number changes
   useEffect(() => {
@@ -171,7 +220,40 @@ export default function InvoiceScreen() {
     return calculateSubtotal() + calculateTax();
   };
 
-  // Fix the save invoice function to ensure it works properly and updates history
+  const handleAddLabor = (operation) => {
+    const laborRate = userSettings.preferences?.laborRate || 85; // Use settings or default to $85/hr
+    const laborPart = {
+      name: `Labor - ${operation.name}`,
+      cost: operation.standardHours * laborRate,
+      quantity: 1,
+      type: 'labor',
+      operation: operation
+    };
+    setParts([...parts, laborPart]);
+    setShowLaborGuide(false);
+    toast.success('Labor operation added to invoice');
+  };
+
+  const handleSetupLaborGuide = async () => {
+    try {
+      setIsSetting(true);
+      const result = await setupLaborGuide();
+      if (result) {
+        toast.success('Labor guide setup complete! Sample operations added.');
+      } else {
+        toast.info('Labor guide data already exists.');
+      }
+      setShowLaborGuide(false);
+      setTimeout(() => setShowLaborGuide(true), 500); // Reopen to refresh data
+    } catch (error) {
+      console.error('Error setting up labor guide:', error);
+      toast.error('Error setting up labor guide. See console for details.');
+    } finally {
+      setIsSetting(false);
+    }
+  };
+
+  // Updated saveInvoice function to handle both creating and updating
   const saveInvoice = async () => {
     if (!selectedCustomer) {
       toast.error('Please select a customer');
@@ -193,8 +275,8 @@ export default function InvoiceScreen() {
         subtotal: calculateSubtotal(),
         tax: calculateTax(),
         total: calculateTotal(),
-        createdAt: new Date(),
-        status: 'pending',
+        updatedAt: new Date(),
+        status: existingInvoice?.status || 'pending',
         userId: user.uid,
         businessInfo: userSettings.businessInfo,
         preferences: {
@@ -202,31 +284,56 @@ export default function InvoiceScreen() {
           invoiceTerms: userSettings.preferences.invoiceTerms
         }
       };
+      
+      // Only set createdAt if this is a new invoice
+      if (!isEditing) {
+        invoiceToSave.createdAt = new Date();
+      }
+      
+      // Track changes if this is a new invoice
+      let invoiceWithTracking = invoiceToSave;
+      
+      if (!isEditing) {
+        // Import tracking initialization for new invoices
+        const { initializeTracking } = await import('../utils/invoiceTracking');
+        // Initialize tracking for the new invoice
+        invoiceWithTracking = initializeTracking(invoiceToSave);
+      } else if (existingInvoice?.tracking) {
+        // Keep existing tracking data
+        invoiceWithTracking.tracking = existingInvoice.tracking;
+      }
 
-      // Save to Firestore first to get the ID
-      const docRef = await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceToSave);
-      console.log('Invoice saved with ID:', docRef.id);
+      let docRef;
+      if (isEditing && invoiceId) {
+        // Update the existing invoice
+        const invoiceRef = doc(db, 'users', user.uid, 'invoices', invoiceId);
+        await updateDoc(invoiceRef, invoiceWithTracking);
+        docRef = { id: invoiceId };
+        console.log('Invoice updated with ID:', invoiceId);
+        toast.success(`Invoice ${invoiceToSave.invoiceNumber} updated successfully`);
+      } else {
+        // Save as a new invoice
+        docRef = await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceWithTracking);
+        console.log('Invoice saved with ID:', docRef.id);
+        toast.success(`Invoice ${invoiceToSave.invoiceNumber} saved successfully`);
+      }
       
       // Add ID to the invoice object
       const invoiceWithId = {
-        ...invoiceToSave,
+        ...invoiceWithTracking,
         id: docRef.id
       };
       
       // Update context with saved invoice including ID
       setInvoice(invoiceWithId);
       
-      toast.success(`Invoice ${invoiceToSave.invoiceNumber} saved successfully`);
+      // Navigate to invoice history
+      navigate('/invoicehistory');
       
-      // Instead of direct navigation, trigger sidebar navigation
-      // by using an event to inform the parent component
-      const event = new CustomEvent('navigateTo', { 
-        detail: { path: 'invoicehistory' }
-      });
-      window.dispatchEvent(event);
-      
-      // Reset form for a new invoice
-      resetInvoiceForm();
+      // If not editing, reset form for a new invoice
+      if (!isEditing) {
+        resetInvoiceForm();
+      }
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast.error('Failed to save invoice: ' + error.message);
@@ -394,6 +501,16 @@ export default function InvoiceScreen() {
           <div>
             <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">Step 2: Add Parts & Services</h3>
             
+            {/* Add Labor Guide Button */}
+            <div className="mb-4 flex gap-2">
+              <button
+                onClick={() => setShowLaborGuide(true)}
+                className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <FaWrench /> Add Labor from Guide
+              </button>
+            </div>
+            
             {/* Parts Section */}
             <div className="mb-6">
               <div className="grid grid-cols-4 gap-4 mb-4">
@@ -469,6 +586,41 @@ export default function InvoiceScreen() {
                 rows="3"
               />
             </div>
+
+            {/* Labor Guide Modal */}
+            {showLaborGuide && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">Labor Guide</h2>
+                    <button
+                      onClick={() => setShowLaborGuide(false)}
+                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      <FaTimes size={20} />
+                    </button>
+                  </div>
+                  <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                    Search for labor operations to add to this invoice. Labor rate: ${userSettings.preferences?.laborRate || 85}/hr
+                  </div>
+                  <div className="mb-4">
+                    <button 
+                      onClick={handleSetupLaborGuide}
+                      disabled={isSetting}
+                      className="text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded transition-colors"
+                    >
+                      {isSetting ? 'Setting up...' : 'Setup Labor Guide Data'}
+                    </button>
+                    <span className="ml-2 text-xs text-gray-500">
+                      Click to initialize sample labor operations
+                    </span>
+                  </div>
+                  <LaborGuideSearch
+                    onSelectOperation={handleAddLabor}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         );
       
