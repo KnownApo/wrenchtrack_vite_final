@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, getDocs, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, updateDoc, getDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../AuthContext';
 import { useInvoices } from '../context/InvoiceContext';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { FaEye, FaTrash, FaPrint, FaFileDownload, FaCheckCircle, FaMoneyBillWave, FaClock, FaHourglass, FaBars, FaPlus, FaSave, FaTimes, FaTools } from 'react-icons/fa';
+import { FaEye, FaTrash, FaPrint, FaFileDownload, FaCheckCircle, FaMoneyBillWave, FaClock, FaHourglass, FaBars, FaPlus, FaSave, FaTimes, FaTools, FaHistory, FaChartLine, FaCheck, FaExclamationTriangle, FaRegClock, FaArchive } from 'react-icons/fa';
 import html2pdf from 'html2pdf.js';
 import InvoiceTrackingStatus from '../components/InvoiceTrackingStatus';
 import { markInvoiceCompleted, initializeTracking, addMilestone, MILESTONE_TYPES, getTrackingSummary } from '../utils/invoiceTracking';
@@ -26,11 +26,22 @@ export default function InvoiceHistoryScreen() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentInvoice, setPaymentInvoice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { addPayment, completeInvoice, changeStatus, isUpdating } = useInvoiceTracking(user?.uid);
+  const { addPayment, completeInvoice, changeStatus, isUpdating, finishInvoice } = useInvoiceTracking(user?.uid);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [showDetailStatusDropdown, setShowDetailStatusDropdown] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState('bottom');
+  
+  // Customer Payment History states
+  const [customerPaymentHistory, setCustomerPaymentHistory] = useState([]);
+  const [paymentMetrics, setPaymentMetrics] = useState({
+    totalInvoices: 0,
+    paidOnTime: 0,
+    paidLate: 0,
+    unpaid: 0,
+    averageDaysToPayment: 0
+  });
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
   // New state for edit modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -106,6 +117,104 @@ export default function InvoiceHistoryScreen() {
   const handleViewInvoice = (invoice) => {
     setSelectedInvoice(invoice);
     setIsModalOpen(true);
+    
+    // If the invoice has customer information, fetch payment history
+    if (invoice?.customer?.email) {
+      fetchCustomerPaymentHistory(invoice.customer.email);
+    } else {
+      // Reset payment history if no customer email
+      setCustomerPaymentHistory([]);
+      setPaymentMetrics({
+        totalInvoices: 0,
+        paidOnTime: 0,
+        paidLate: 0,
+        unpaid: 0,
+        averageDaysToPayment: 0
+      });
+    }
+  };
+  
+  // Function to fetch the customer's payment history
+  const fetchCustomerPaymentHistory = async (customerEmail) => {
+    if (!customerEmail || !user) {
+      setIsLoadingHistory(false);
+      return;
+    }
+    
+    try {
+      setIsLoadingHistory(true);
+      
+      // Query invoices that belong to this customer
+      const invoicesRef = collection(db, 'users', user.uid, 'invoices');
+      const customerQuery = query(invoicesRef, where("customer.email", "==", customerEmail));
+      const querySnapshot = await getDocs(customerQuery);
+      
+      // Process the customer's invoices
+      const invoices = [];
+      let totalDaysToPayment = 0;
+      let paidInvoicesCount = 0;
+      let paidOnTimeCount = 0;
+      let paidLateCount = 0;
+      let unpaidCount = 0;
+      
+      querySnapshot.forEach(doc => {
+        const invoiceData = doc.data();
+        
+        // Skip the current invoice in the history if it's the selected one
+        if (selectedInvoice && doc.id === selectedInvoice.id) return;
+        
+        const invoice = {
+          id: doc.id,
+          ...invoiceData,
+          createdAt: invoiceData.createdAt?.toDate?.() || new Date(invoiceData.createdAt),
+          paidAt: invoiceData.paidAt?.toDate?.() || (invoiceData.paidAt ? new Date(invoiceData.paidAt) : null),
+          dueDate: invoiceData.dueDate?.toDate?.() || (invoiceData.dueDate ? new Date(invoiceData.dueDate) : null)
+        };
+        
+        // Calculate days to payment if applicable
+        if (invoice.createdAt && invoice.paidAt) {
+          const daysToPayment = Math.floor((invoice.paidAt - invoice.createdAt) / (1000 * 60 * 60 * 24));
+          invoice.daysToPayment = daysToPayment;
+          totalDaysToPayment += daysToPayment;
+          paidInvoicesCount++;
+          
+          // Determine if paid on time or late
+          if (invoice.dueDate && invoice.paidAt > invoice.dueDate) {
+            paidLateCount++;
+            invoice.paymentStatus = 'late';
+          } else {
+            paidOnTimeCount++;
+            invoice.paymentStatus = 'on-time';
+          }
+        } else if (invoice.dueDate && new Date() > invoice.dueDate) {
+          unpaidCount++;
+          invoice.paymentStatus = 'overdue';
+        } else {
+          invoice.paymentStatus = 'pending';
+        }
+        
+        invoices.push(invoice);
+      });
+      
+      // Calculate metrics
+      const metrics = {
+        totalInvoices: invoices.length,
+        paidOnTime: paidOnTimeCount,
+        paidLate: paidLateCount,
+        unpaid: unpaidCount,
+        averageDaysToPayment: paidInvoicesCount > 0 ? Math.round(totalDaysToPayment / paidInvoicesCount) : 0
+      };
+      
+      // Sort invoices by date (newest first)
+      invoices.sort((a, b) => b.createdAt - a.createdAt);
+      
+      setCustomerPaymentHistory(invoices);
+      setPaymentMetrics(metrics);
+    } catch (error) {
+      console.error('Error fetching customer payment history:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
   };
   
   const handleDeleteInvoice = async (id) => {
@@ -305,6 +414,8 @@ const handlePaymentSubmit = async (e) => {
         return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Paid</span>;
       case 'warranty':
         return <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Warranty</span>;
+      case 'finished':
+        return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">Finished</span>;
       default:
         return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">{invoice.status || 'Unknown'}</span>;
     }
@@ -567,6 +678,10 @@ const handlePaymentSubmit = async (e) => {
     
     return matchesStatus && matchesSearch;
   });
+  
+  // Separate active and archived invoices (finished status)
+  const activeInvoices = filteredInvoices.filter(invoice => invoice.status !== 'finished');
+  const archivedInvoices = filteredInvoices.filter(invoice => invoice.status === 'finished');
 
   // Updated function to open edit modal instead of redirecting
   const handleEditInvoice = (invoice) => {
@@ -719,6 +834,14 @@ const handlePaymentSubmit = async (e) => {
             >
               Warranty
             </button>
+            <button
+              onClick={() => setStatusFilter('finished')}
+              className={`px-3 py-1 rounded-md text-sm ${
+                statusFilter === 'finished' ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              Finished
+            </button>
           </div>
           
           <div className="w-full md:w-64">
@@ -735,134 +858,265 @@ const handlePaymentSubmit = async (e) => {
         {isLoading ? (
           <div className="flex justify-center my-12">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
+          </div>
         ) : filteredInvoices.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-center">
             <p className="text-gray-500">No invoices found</p>
-              </div>
+          </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Invoice
-                    </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer
-                    </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paid
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Remaining
-                    </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                {filteredInvoices.map(invoice => (
-                      <tr key={invoice.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                        {invoice.invoiceNumber || `#${invoice.id.substring(0, 6)}`}
-                          </div>
-                        </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{invoice.customer?.name || 'N/A'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(invoice)}
-                        </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                        ${calculateInvoiceAmount(invoice).toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-green-600">
-                        ${(parseFloat(invoice.paidAmount) || 0).toFixed(2)}
-                          </div>
-                        </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-red-600">
-                        ${calculateRemainingAmount(invoice)}
-                      </div>
-                        </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                      <div className="flex flex-wrap gap-1 justify-center">
-                        <button 
-                          onClick={() => handleViewInvoice(invoice)} 
-                          className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center text-xs"
-                        >
-                          <FaEye className="mr-1" />
-                          View
-                        </button>
-                        <button 
-                          onClick={() => openPaymentModal(invoice)}
-                          className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center text-xs"
-                        >
-                          <FaMoneyBillWave className="mr-1" />
-                          Pay
-                        </button>
-                        
-                        {/* Status buttons - include warranty option */}
-                        <div className="inline-flex flex-wrap">
-                          <button 
-                            onClick={() => handleUpdateStatus(invoice, 'pending')}
-                            className={`px-2 py-1 ${invoice.status === 'pending' ? 'bg-yellow-200 text-yellow-800' : 'bg-yellow-100 text-yellow-700'} rounded-l hover:bg-yellow-200 text-xs border-r border-white`}
-                          >
-                            Pending
-                          </button>
-                          <button 
-                            onClick={() => handleUpdateStatus(invoice, 'completed')}
-                            className={`px-2 py-1 ${invoice.status === 'completed' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'} hover:bg-blue-200 text-xs border-r border-white`}
-                          >
-                            Done
-                          </button>
-                          <button 
-                            onClick={() => handleUpdateStatus(invoice, 'paid')}
-                            className={`px-2 py-1 ${invoice.status === 'paid' ? 'bg-green-200 text-green-800' : 'bg-green-100 text-green-700'} ${invoice.status === 'warranty' ? 'border-r border-white' : 'rounded-r'} hover:bg-green-200 text-xs`}
-                          >
-                            Paid
-                          </button>
-                          <button 
-                            onClick={() => handleUpdateStatus(invoice, 'warranty')}
-                            className={`px-2 py-1 ${invoice.status === 'warranty' ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-700'} rounded-r hover:bg-purple-200 text-xs`}
-                          >
-                            Warranty
-                          </button>
-                        </div>
+          <div className="space-y-8">
+            {/* Active Invoices Section */}
+            {(statusFilter === 'all' || statusFilter !== 'finished') && activeInvoices.length > 0 && (
+              <div>
+                <h2 className="text-lg font-medium mb-3 flex items-center">
+                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mr-2">{activeInvoices.length}</span>
+                  Active Invoices
+                </h2>
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Invoice
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Customer
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Paid
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Remaining
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {activeInvoices.map(invoice => (
+                        <tr key={invoice.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {invoice.invoiceNumber || `#${invoice.id.substring(0, 6)}`}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{invoice.customer?.name || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(invoice)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              ${calculateInvoiceAmount(invoice).toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-green-600">
+                              ${(parseFloat(invoice.paidAmount) || 0).toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-red-600">
+                              ${calculateRemainingAmount(invoice)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                            <div className="flex flex-wrap gap-1 justify-center">
+                              <button 
+                                onClick={() => handleViewInvoice(invoice)} 
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center text-xs"
+                              >
+                                <FaEye className="mr-1" />
+                                View
+                              </button>
+                              <button 
+                                onClick={() => openPaymentModal(invoice)}
+                                className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center text-xs"
+                              >
+                                <FaMoneyBillWave className="mr-1" />
+                                Pay
+                              </button>
+                              
+                              {/* Status buttons - include warranty option */}
+                              <div className="inline-flex flex-wrap">
+                                <button 
+                                  onClick={() => handleUpdateStatus(invoice, 'pending')}
+                                  className={`px-2 py-1 ${invoice.status === 'pending' ? 'bg-yellow-200 text-yellow-800' : 'bg-yellow-100 text-yellow-700'} rounded-l hover:bg-yellow-200 text-xs border-r border-white`}
+                                >
+                                  Pending
+                                </button>
+                                <button 
+                                  onClick={() => handleUpdateStatus(invoice, 'completed')}
+                                  className={`px-2 py-1 ${invoice.status === 'completed' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'} hover:bg-blue-200 text-xs border-r border-white`}
+                                >
+                                  Done
+                                </button>
+                                <button 
+                                  onClick={() => handleUpdateStatus(invoice, 'paid')}
+                                  className={`px-2 py-1 ${invoice.status === 'paid' ? 'bg-green-200 text-green-800' : 'bg-green-100 text-green-700'} hover:bg-green-200 text-xs border-r border-white`}
+                                >
+                                  Paid
+                                </button>
+                                <button 
+                                  onClick={() => handleUpdateStatus(invoice, 'warranty')}
+                                  className={`px-2 py-1 ${invoice.status === 'warranty' ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-700'} hover:bg-purple-200 text-xs border-r border-white rounded-r`}
+                                >
+                                  Warranty
+                                </button>
+                              </div>
+                              
+                              {/* Archive Button */}
+                              {invoice.status === 'paid' && (
+                                <button 
+                                  onClick={() => handleUpdateStatus(invoice, 'finished')}
+                                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center text-xs"
+                                >
+                                  <FaArchive className="mr-1" />
+                                  Archive
+                                </button>
+                              )}
 
-                        <button
-                          onClick={() => handleDeleteInvoice(invoice.id)}
-                          className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center text-xs"
-                        >
-                          <FaTrash className="mr-1" />
-                          Del
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                              <button
+                                onClick={() => handleDeleteInvoice(invoice.id)}
+                                className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center text-xs"
+                              >
+                                <FaTrash className="mr-1" />
+                                Del
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            {/* Archived Invoices Section */}
+            {(statusFilter === 'all' || statusFilter === 'finished') && archivedInvoices.length > 0 && (
+              <div className="mt-8">
+                <details className="mb-3">
+                  <summary className="text-lg font-medium flex items-center cursor-pointer">
+                    <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs mr-2">{archivedInvoices.length}</span>
+                    Archived Invoices
+                    <span className="text-xs text-gray-400 ml-2">(click to expand)</span>
+                  </summary>
+                  
+                  <div className="bg-white rounded-lg shadow overflow-hidden mt-4 opacity-80">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Invoice
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Customer
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Paid
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Archived Date
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {archivedInvoices.map(invoice => (
+                          <tr key={invoice.id} className="opacity-70 bg-gray-50 hover:bg-gray-100">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-500">
+                                {invoice.invoiceNumber || `#${invoice.id.substring(0, 6)}`}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-500">{invoice.customer?.name || 'N/A'}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {getStatusBadge(invoice)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-500">
+                                ${calculateInvoiceAmount(invoice).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-500">
+                                ${(parseFloat(invoice.paidAmount) || 0).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-500">
+                                {formatDate(invoice.finishedAt)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                <button 
+                                  onClick={() => handleViewInvoice(invoice)} 
+                                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center text-xs"
+                                >
+                                  <FaEye className="mr-1" />
+                                  View
+                                </button>
+                                
+                                {/* Unarchive Button */}
+                                <button 
+                                  onClick={() => handleUpdateStatus(invoice, 'paid')}
+                                  className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center text-xs"
+                                >
+                                  <FaArchive className="mr-1" />
+                                  Unarchive
+                                </button>
+                                
+                                <button
+                                  onClick={() => handleDeleteInvoice(invoice.id)}
+                                  className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center text-xs"
+                                >
+                                  <FaTrash className="mr-1" />
+                                  Del
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Payment Modal */}
@@ -949,7 +1203,7 @@ const handlePaymentSubmit = async (e) => {
       {/* Invoice Detail Modal */}
       {isModalOpen && selectedInvoice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-lg max-w-5xl w-full p-6 m-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-5xl w-full p-6 m-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Invoice Details</h2>
               <button
@@ -959,6 +1213,15 @@ const handlePaymentSubmit = async (e) => {
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
+              </button>
+            </div>
+
+            {/* Tabs for Invoice Details and Customer Payment History */}
+            <div className="flex border-b mb-6">
+              <button
+                className="py-2 px-4 text-blue-600 border-b-2 border-blue-600 font-medium"
+              >
+                Invoice Details
               </button>
             </div>
 
@@ -999,10 +1262,235 @@ const handlePaymentSubmit = async (e) => {
                   <p className="mb-2">
                     <span className="font-medium">Address:</span> {selectedInvoice.customer?.address || 'N/A'}
                   </p>
+                  
+                  {/* Payment Reliability Summary */}
+                  {selectedInvoice.customer?.email && (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold mb-1 flex items-center">
+                          <FaChartLine className="mr-1 text-blue-500" /> 
+                          Payment Reliability
+                        </h4>
+                        {isLoadingHistory ? (
+                          <span className="text-xs text-gray-500">Loading...</span>
+                        ) : (
+                          <div className="flex items-center">
+                            <div className="w-20 h-1.5 rounded-full bg-gray-200 mr-2">
+                              <div 
+                                className="h-1.5 rounded-full bg-blue-500" 
+                                style={{ 
+                                  width: `${paymentMetrics.totalInvoices > 0 
+                                    ? (paymentMetrics.paidOnTime / Math.max(1, paymentMetrics.totalInvoices)) * 100 
+                                    : 0}%` 
+                                }}
+                              ></div>
+                            </div>
+                            <span className="text-xs font-medium">
+                              {paymentMetrics.totalInvoices > 0 
+                                ? Math.round((paymentMetrics.paidOnTime / Math.max(1, paymentMetrics.totalInvoices)) * 100)
+                                : 0}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
+            {/* Customer Payment History Section */}
+            {selectedInvoice.customer?.email && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center">
+                  <FaHistory className="mr-2 text-blue-500" />
+                  Customer Payment History
+                </h3>
+                
+                {isLoadingHistory ? (
+                  <div className="flex justify-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Payment Metrics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      {/* Average Days to Pay */}
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-blue-700">Avg. Days to Pay</p>
+                          <FaRegClock className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <p className="text-xl font-bold text-blue-700">
+                          {paymentMetrics.averageDaysToPayment || 0}
+                        </p>
+                        <p className="text-xs text-blue-600/70 mt-1">
+                          days on average
+                        </p>
+                      </div>
+                      
+                      {/* Paid On Time */}
+                      <div className="bg-green-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-green-700">Paid On Time</p>
+                          <FaCheck className="h-4 w-4 text-green-500" />
+                        </div>
+                        <p className="text-xl font-bold text-green-700">
+                          {paymentMetrics.paidOnTime || 0}
+                        </p>
+                        <p className="text-xs text-green-600/70 mt-1">
+                          invoices paid on time
+                        </p>
+                      </div>
+                      
+                      {/* Paid Late */}
+                      <div className="bg-yellow-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-yellow-700">Paid Late</p>
+                          <FaMoneyBillWave className="h-4 w-4 text-yellow-500" />
+                        </div>
+                        <p className="text-xl font-bold text-yellow-700">
+                          {paymentMetrics.paidLate || 0}
+                        </p>
+                        <p className="text-xs text-yellow-600/70 mt-1">
+                          invoices paid late
+                        </p>
+                      </div>
+                      
+                      {/* Unpaid/Overdue */}
+                      <div className="bg-red-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-medium text-red-700">Unpaid/Overdue</p>
+                          <FaExclamationTriangle className="h-4 w-4 text-red-500" />
+                        </div>
+                        <p className="text-xl font-bold text-red-700">
+                          {paymentMetrics.unpaid || 0}
+                        </p>
+                        <p className="text-xs text-red-600/70 mt-1">
+                          overdue invoices
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Previous Invoices Table */}
+                    <div className="bg-white border rounded-md overflow-hidden mb-4">
+                      <h4 className="text-sm font-medium p-4 border-b">Previous Invoices</h4>
+                      
+                      {customerPaymentHistory.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {customerPaymentHistory.map((invoice) => (
+                                <tr key={invoice.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    {invoice.invoiceNumber || invoice.id.substring(0, 6)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    {formatDate(invoice.createdAt)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    ${parseFloat(invoice.total || 0).toFixed(2)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    {invoice.paidAt ? (
+                                      <span className="text-gray-900">
+                                        {formatDate(invoice.paidAt)} 
+                                        {invoice.daysToPayment !== undefined && (
+                                          <span className="text-xs text-gray-500 ml-1">
+                                            ({invoice.daysToPayment} days)
+                                          </span>
+                                        )}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-500">Not paid</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    {invoice.paymentStatus === 'on-time' && (
+                                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                                        On time
+                                      </span>
+                                    )}
+                                    {invoice.paymentStatus === 'late' && (
+                                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                        Late
+                                      </span>
+                                    )}
+                                    {invoice.paymentStatus === 'overdue' && (
+                                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
+                                        Overdue
+                                      </span>
+                                    )}
+                                    {invoice.paymentStatus === 'pending' && (
+                                      <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
+                                        Pending
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <p>No previous invoices found for this customer.</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Payment History for Current Invoice */}
+                    {selectedInvoice.paymentHistory && selectedInvoice.paymentHistory.length > 0 && (
+                      <div className="bg-white border rounded-md overflow-hidden mb-4">
+                        <h4 className="text-sm font-medium p-4 border-b">Current Invoice Payment History</h4>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {selectedInvoice.paymentHistory.map((payment, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    {formatDate(payment.date?.toDate ? payment.date.toDate() : payment.date)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    ${parseFloat(payment.amount || 0).toFixed(2)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 capitalize">
+                                    {payment.method}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                                      {payment.status || 'Completed'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            
             <div className="mb-6">
               <h3 className="text-lg font-semibold mb-2">Parts & Services</h3>
               <div className="bg-white border rounded-md overflow-hidden">
