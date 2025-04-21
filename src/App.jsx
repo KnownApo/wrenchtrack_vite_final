@@ -5,7 +5,7 @@ import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
 import InvoiceScreen from './screens/InvoiceScreen';
 import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
-import SignatureScreen from './screens/SignatureScreen';
+import VehicleServiceRecordsScreen from './screens/VehicleServiceRecordsScreen';
 import PaymentScreen from './screens/PaymentScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { auth, db } from './firebase';
@@ -13,8 +13,11 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { AuthProvider, useAuth } from './AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { InvoiceProvider } from './context/InvoiceContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import firebaseService from './services/firebaseService';
+import { setupLaborGuide } from './utils/setupLaborGuide';
+import LaborGuideDebugger from './utils/laborGuideDebugger';
 
 // Simple ForgotPasswordScreen component
 function ForgotPasswordScreen() {
@@ -88,7 +91,9 @@ function App() {
       <ErrorBoundary>
         <AuthProvider>
           <ThemeProvider>
-            <AppContent />
+            <InvoiceProvider>
+              <AppContent />
+            </InvoiceProvider>
           </ThemeProvider>
         </AuthProvider>
       </ErrorBoundary>
@@ -99,6 +104,27 @@ function App() {
 function AppContent() {
   const { user, loading } = useAuth();
   const [theme, setTheme] = useState('light'); // Default theme
+  const [isSettingUpLaborGuide, setIsSettingUpLaborGuide] = useState(false);
+  
+  // Handle manual setup of labor guide data
+  const handleSetupLaborGuide = async () => {
+    if (!user) return;
+    
+    try {
+      setIsSettingUpLaborGuide(true);
+      const result = await setupLaborGuide();
+      if (result) {
+        alert("Labor guide setup complete! Sample operations added.");
+      } else {
+        alert("Labor guide data already exists.");
+      }
+    } catch (error) {
+      console.error("Error setting up labor guide:", error);
+      alert("Error setting up labor guide. Check console for details.");
+    } finally {
+      setIsSettingUpLaborGuide(false);
+    }
+  };
   
   // Initialize user documents when logged in
   useEffect(() => {
@@ -107,6 +133,9 @@ function AppContent() {
         try {
           // Ensure user documents are initialized
           await firebaseService.initializeUserDocuments();
+          
+          // Initialize labor guide data if needed
+          await setupLaborGuide();
         } catch (error) {
           console.error("Error initializing user documents:", error);
         }
@@ -145,9 +174,12 @@ function AppContent() {
         <Route path="/parts" element={<PrivateRoute><HomeScreen activePage="parts" /></PrivateRoute>} />
         <Route path="/invoice" element={<PrivateRoute><InvoiceScreen /></PrivateRoute>} />
         <Route path="/invoicehistory" element={<PrivateRoute><InvoiceHistoryScreen /></PrivateRoute>} />
-        <Route path="/signature" element={<PrivateRoute><SignatureScreen /></PrivateRoute>} />
+        <Route path="/service-records" element={<PrivateRoute><VehicleServiceRecordsScreen /></PrivateRoute>} />
         <Route path="/payment" element={<PrivateRoute><PaymentScreen /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><SettingsScreen /></PrivateRoute>} />
+        
+        {/* Debug route */}
+        <Route path="/debug/labor-guide" element={<PrivateRoute><LaborGuideDebugger /></PrivateRoute>} />
         
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />

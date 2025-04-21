@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Dashboard from './DashboardScreen';
 import Customers from './CustomersScreen';
-import JobTimer from './JobTimerScreen';
 import PartsCatalog from './PartsScreen';
 import InvoiceScreen from './InvoiceScreen';
 import InvoiceHistory from './InvoiceHistoryScreen';
 import SignatureScreen from './SignatureScreen';
 import Payments from './PaymentScreen';
 import Settings from './SettingsScreen';
+import VehicleServiceRecordScreen from './VehicleServiceRecordsScreen';
 import { useAuth } from '../AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useInvoices } from '../context/InvoiceContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +21,7 @@ export default function HomeScreen({ activePage = 'dashboard' }) {
   const [currentPage, setCurrentPage] = useState(activePage);
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { refreshInvoices } = useInvoices();
   const [avatarUrl, setAvatarUrl] = useState('');
   const [userName, setUserName] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -86,14 +88,23 @@ export default function HomeScreen({ activePage = 'dashboard' }) {
     }
   };
 
+  // Handle page changes
+  const handlePageChange = (pageKey) => {
+    setCurrentPage(pageKey);
+    
+    // Refresh invoice data when switching to these pages
+    if (pageKey === 'dashboard' || pageKey === 'invoicehistory') {
+      refreshInvoices();
+    }
+  };
+
   const pages = [
     { key: 'dashboard', label: 'Dashboard', icon: '📊', component: <Dashboard /> },
     { key: 'customers', label: 'Customers', icon: '👥', component: <Customers /> },
-    { key: 'job', label: 'Job Timer', icon: '⏱️', component: <JobTimer /> },
     { key: 'parts', label: 'Parts Catalog', icon: '🛠️', component: <PartsCatalog /> },
     { key: 'invoice', label: 'Invoices', icon: '📄', component: <InvoiceScreen /> },
     { key: 'invoicehistory', label: 'Invoice History', icon: '📜', component: <InvoiceHistory /> },
-    { key: 'signature', label: 'Signatures', icon: '✍️', component: <SignatureScreen /> },
+    { key: 'service-records', label: 'Service Records', icon: '✍️', component: <VehicleServiceRecordScreen /> },
     { key: 'payment', label: 'Payments', icon: '💳', component: <Payments /> },
     { key: 'settings', label: 'Settings', icon: '⚙️', component: <Settings /> },
   ];
@@ -126,7 +137,7 @@ export default function HomeScreen({ activePage = 'dashboard' }) {
             {pages.map((page) => (
               <button
                 key={page.key}
-                onClick={() => setCurrentPage(page.key)}
+                onClick={() => handlePageChange(page.key)}
                 className={`flex items-center gap-4 p-3 rounded-lg transition w-full text-left ${
                   currentPage === page.key 
                     ? 'bg-blue-100 dark:bg-blue-900' 

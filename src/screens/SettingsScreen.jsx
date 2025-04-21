@@ -40,6 +40,7 @@ const SettingsScreen = () => {
     defaultInvoiceTitle: 'Invoice',
     invoiceTerms: 'Net 30',
     invoiceNotes: 'Thank you for your business!',
+    laborRate: 85,
   });
   
   // Notification settings
@@ -460,7 +461,8 @@ const SettingsScreen = () => {
           defaultInvoiceTitle: preferences.defaultInvoiceTitle || 'Invoice',
           invoiceNotes: preferences.invoiceNotes || 'Thank you for your business!',
           invoiceTerms: preferences.invoiceTerms || 'Net 30',
-          timezone: preferences.timezone || 'America/New_York'
+          timezone: preferences.timezone || 'America/New_York',
+          laborRate: preferences.laborRate || 85
         },
         security: {
           passwordLastChanged: security.passwordLastChanged || 'Never',
@@ -761,6 +763,26 @@ const SettingsScreen = () => {
           {activeTab === 'preferences' && (
             <div className="settings-section">
               <h2>Preferences</h2>
+              
+              <div className="form-group">
+                <label htmlFor="laborRate">Labor Rate (per hour)</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    id="laborRate"
+                    name="laborRate"
+                    value={preferences.laborRate || 85}
+                    onChange={handlePreferencesChange}
+                    className="form-control"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <small className="form-text text-muted">
+                  This rate will be used for calculations when adding labor operations to invoices.
+                </small>
+              </div>
               
               <div className="form-group">
                 <label htmlFor="currency">Currency</label>
