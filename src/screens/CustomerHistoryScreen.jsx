@@ -1,15 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../AuthContext';
-import { FiUser, FiMail, FiPhone, FiMapPin, FiEdit2, FiTrash2, FiSearch, FiClock, FiDollarSign, FiFileText, FiBriefcase, FiX } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import { FiUser, FiMail, FiPhone, FiMapPin, FiEdit2, FiTrash2, FiSearch, FiClock, FiDollarSign, FiFileText, FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import debounce from 'lodash/debounce';
 
 export default function CustomerHistoryScreen() {
   const { user } = useAuth();
   const [customers, setCustomers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [editData, setEditData] = useState({
@@ -87,7 +86,6 @@ export default function CustomerHistoryScreen() {
   }, [user]);
 
   const handleSearch = debounce((query) => {
-    setSearchQuery(query);
     if (!query.trim()) {
       setFilteredCustomers(customers);
       return;
@@ -99,7 +97,6 @@ export default function CustomerHistoryScreen() {
     );
     setFilteredCustomers(filtered);
   }, 300);
-
   const startEditing = (customer) => {
     setEditingCustomer(customer.id);
     setEditData({

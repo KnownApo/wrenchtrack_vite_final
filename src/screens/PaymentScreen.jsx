@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FiDollarSign, FiCreditCard, FiCheckCircle, FiAlertCircle, FiClock, FiUser, FiFileText, FiArrowLeft } from 'react-icons/fi';
 import { toast } from 'react-toastify';

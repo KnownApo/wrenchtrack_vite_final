@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import html2pdf from 'html2pdf.js';
 import { FaPlus, FaTrash, FaPrint, FaSave, FaArrowRight, FaArrowLeft, FaCheck, FaWrench, FaTimes } from 'react-icons/fa';

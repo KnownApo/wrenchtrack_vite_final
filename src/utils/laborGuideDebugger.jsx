@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 // Removed Firebase imports to use only local storage
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 // Sample operations data for local use
 const SAMPLE_OPERATIONS = [

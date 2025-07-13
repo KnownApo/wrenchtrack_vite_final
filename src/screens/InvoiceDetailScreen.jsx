@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import html2pdf from 'html2pdf.js';
 import { FiArrowLeft, FiDownload, FiClock, FiFileText, FiDollarSign, FiUser, FiMail, FiMapPin, FiBriefcase, FiCalendar, FiActivity, FiCheck, FiCreditCard, FiAlertTriangle, FiChevronsUp } from 'react-icons/fi';

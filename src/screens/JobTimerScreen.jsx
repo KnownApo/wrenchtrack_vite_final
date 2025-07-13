@@ -3,7 +3,7 @@ import debounce from 'lodash/debounce';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, addDoc, updateDoc, doc, where } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from '../AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { FiClock, FiPlay, FiPause, FiCheck, FiSearch, FiArrowLeft, FiPlus, FiTrash2 } from 'react-icons/fi';
 
