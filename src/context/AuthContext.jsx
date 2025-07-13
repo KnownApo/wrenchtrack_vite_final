@@ -51,11 +51,11 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const value = { user };
+  const value = { user, loading };
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }
