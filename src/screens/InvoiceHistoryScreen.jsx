@@ -32,6 +32,11 @@ export default function InvoiceHistoryScreen() {
   const [showDetailStatusDropdown, setShowDetailStatusDropdown] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState('bottom');
   
+  // Batch operations state
+  const [selectedInvoices, setSelectedInvoices] = useState([]);
+  const [showBatchActions, setShowBatchActions] = useState(false);
+  const [isAllSelected, setIsAllSelected] = useState(false);
+  
   // Customer Payment History states
   const [customerPaymentHistory, setCustomerPaymentHistory] = useState([]);
   const [paymentMetrics, setPaymentMetrics] = useState({
@@ -221,7 +226,7 @@ export default function InvoiceHistoryScreen() {
     if (window.confirm('Are you sure you want to delete this invoice?')) {
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'invoices', id));
-        toast.success('Invoice deleted successfully');
+      toast.success('Invoice deleted successfully');
       setInvoices(invoices.filter(invoice => invoice.id !== id));
     } catch (error) {
       console.error('Error deleting invoice:', error);
@@ -271,7 +276,7 @@ export default function InvoiceHistoryScreen() {
       
       // Update in Firestore
       const invoiceRef = doc(db, 'users', user.uid, 'invoices', invoice.id);
-      await updateDoc(invoiceRef, {
+      await updateDoc(invoiceRef, { 
         status: newStatus,
         updatedAt: new Date()
       });
@@ -513,9 +518,9 @@ const handlePaymentSubmit = async (e) => {
             <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb;">Quantity</th>
             <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb;">Price</th>
             <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid #e5e7eb;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
+            </tr>
+          </thead>
+          <tbody>
     `;
     
     if (invoice.parts && invoice.parts.length > 0) {
@@ -529,11 +534,11 @@ const handlePaymentSubmit = async (e) => {
             <td style="padding: 12px 15px;">
               <div>${part.name}</div>
               ${part.description ? `<div style="color: #6b7280; font-size: 0.875rem;">${part.description}</div>` : ''}
-            </td>
+                </td>
             <td style="padding: 12px 15px;">${quantity}</td>
             <td style="padding: 12px 15px;">$${price.toFixed(2)}</td>
             <td style="padding: 12px 15px;">$${total}</td>
-          </tr>
+              </tr>
         `;
       });
     } else {
@@ -551,16 +556,16 @@ const handlePaymentSubmit = async (e) => {
     const remaining = Math.max(0, total - paid);
     
     partsHTML += `
-        </tbody>
+          </tbody>
         <tfoot style="background-color: #f9fafb; font-weight: 500;">
           <tr>
             <td colspan="3" style="padding: 12px 15px; text-align: right;">Subtotal</td>
             <td style="padding: 12px 15px;">$${subtotal.toFixed(2)}</td>
-          </tr>
-          <tr>
+            </tr>
+            <tr>
             <td colspan="3" style="padding: 12px 15px; text-align: right;">Tax</td>
             <td style="padding: 12px 15px;">$${tax.toFixed(2)}</td>
-          </tr>
+            </tr>
           <tr>
             <td colspan="3" style="padding: 12px 15px; text-align: right; font-weight: bold;">Total</td>
             <td style="padding: 12px 15px; font-weight: bold;">$${total.toFixed(2)}</td>
@@ -572,9 +577,9 @@ const handlePaymentSubmit = async (e) => {
           <tr>
             <td colspan="3" style="padding: 12px 15px; text-align: right;">Remaining</td>
             <td style="padding: 12px 15px; color: #dc2626;">$${remaining.toFixed(2)}</td>
-          </tr>
-        </tfoot>
-      </table>
+            </tr>
+          </tfoot>
+        </table>
     `;
     
     partsTable.innerHTML = partsHTML;
@@ -609,13 +614,13 @@ const handlePaymentSubmit = async (e) => {
       <p style="margin: 5px 0;">WrenchTrack - Your Reliable Automotive Service Partner</p>
     `;
     invoiceElement.appendChild(footer);
-    
-    // Generate PDF
+      
+      // Generate PDF
     const opt = {
       margin: 10,
       filename: `invoice-${invoice.invoiceNumber || invoice.id.substring(0, 6)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     
@@ -780,21 +785,21 @@ const handlePaymentSubmit = async (e) => {
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Invoice History</h1>
-          <button 
+            <button
             onClick={handleRefresh}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center text-sm"
-          >
+            >
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
+              </svg>
             Refresh
-          </button>
+            </button>
         </div>
-        
+
         {/* Filters and Search */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div className="flex space-x-2">
-            <button
+                <button
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-1 rounded-md text-sm ${
                 statusFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
@@ -841,8 +846,8 @@ const handlePaymentSubmit = async (e) => {
               }`}
             >
               Finished
-            </button>
-          </div>
+                </button>
+              </div>
           
           <div className="w-full md:w-64">
             <input
@@ -852,7 +857,7 @@ const handlePaymentSubmit = async (e) => {
               placeholder="Search invoices..."
               className="w-full px-3 py-2 border rounded-md"
             />
-          </div>
+            </div>
         </div>
 
         {isLoading ? (
@@ -873,21 +878,21 @@ const handlePaymentSubmit = async (e) => {
                   Active Invoices
                 </h2>
                 <div className="bg-white rounded-lg shadow overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Invoice
-                        </th>
+                    </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
-                        </th>
+                      Customer
+                    </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Date
-                        </th>
+                    </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
+                      Status
+                    </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Amount
                         </th>
@@ -898,21 +903,21 @@ const handlePaymentSubmit = async (e) => {
                           Remaining
                         </th>
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
                       {activeInvoices.map(invoice => (
-                        <tr key={invoice.id} className="hover:bg-gray-50">
+                      <tr key={invoice.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900">
                               {invoice.invoiceNumber || `#${invoice.id.substring(0, 6)}`}
-                            </div>
-                          </td>
+                          </div>
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{invoice.customer?.name || 'N/A'}</div>
-                          </td>
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</div>
                           </td>
@@ -920,15 +925,15 @@ const handlePaymentSubmit = async (e) => {
                             {getStatusBadge(invoice)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900">
                               ${calculateInvoiceAmount(invoice).toFixed(2)}
-                            </div>
-                          </td>
+                          </div>
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-green-600">
                               ${(parseFloat(invoice.paidAmount) || 0).toFixed(2)}
                             </div>
-                          </td>
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-red-600">
                               ${calculateRemainingAmount(invoice)}
@@ -936,40 +941,40 @@ const handlePaymentSubmit = async (e) => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                             <div className="flex flex-wrap gap-1 justify-center">
-                              <button 
-                                onClick={() => handleViewInvoice(invoice)} 
+                            <button 
+                              onClick={() => handleViewInvoice(invoice)} 
                                 className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center text-xs"
-                              >
+                            >
                                 <FaEye className="mr-1" />
                                 View
-                              </button>
-                              <button 
+                            </button>
+                            <button 
                                 onClick={() => openPaymentModal(invoice)}
                                 className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center text-xs"
                               >
                                 <FaMoneyBillWave className="mr-1" />
                                 Pay
-                              </button>
+                            </button>
                               
                               {/* Status buttons - include warranty option */}
                               <div className="inline-flex flex-wrap">
-                                <button 
+                            <button 
                                   onClick={() => handleUpdateStatus(invoice, 'pending')}
                                   className={`px-2 py-1 ${invoice.status === 'pending' ? 'bg-yellow-200 text-yellow-800' : 'bg-yellow-100 text-yellow-700'} rounded-l hover:bg-yellow-200 text-xs border-r border-white`}
                                 >
                                   Pending
-                                </button>
-                                <button 
-                                  onClick={() => handleUpdateStatus(invoice, 'completed')}
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(invoice, 'completed')}
                                   className={`px-2 py-1 ${invoice.status === 'completed' ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-700'} hover:bg-blue-200 text-xs border-r border-white`}
-                                >
+                            >
                                   Done
-                                </button>
-                                <button 
-                                  onClick={() => handleUpdateStatus(invoice, 'paid')}
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(invoice, 'paid')}
                                   className={`px-2 py-1 ${invoice.status === 'paid' ? 'bg-green-200 text-green-800' : 'bg-green-100 text-green-700'} hover:bg-green-200 text-xs border-r border-white`}
-                                >
-                                  Paid
+                            >
+                              Paid
                                 </button>
                                 <button 
                                   onClick={() => handleUpdateStatus(invoice, 'warranty')}
@@ -996,16 +1001,16 @@ const handlePaymentSubmit = async (e) => {
                               >
                                 <FaTrash className="mr-1" />
                                 Del
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                       ))}
-                    </tbody>
-                  </table>
+                </tbody>
+              </table>
                 </div>
-              </div>
-            )}
+            </div>
+          )}
             
             {/* Archived Invoices Section */}
             {(statusFilter === 'all' || statusFilter === 'finished') && archivedInvoices.length > 0 && (
@@ -1053,7 +1058,7 @@ const handlePaymentSubmit = async (e) => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-500">
                                 {invoice.invoiceNumber || `#${invoice.id.substring(0, 6)}`}
-                              </div>
+        </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-500">{invoice.customer?.name || 'N/A'}</div>
@@ -1067,7 +1072,7 @@ const handlePaymentSubmit = async (e) => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-500">
                                 ${calculateInvoiceAmount(invoice).toFixed(2)}
-                              </div>
+      </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-500">
@@ -1090,7 +1095,7 @@ const handlePaymentSubmit = async (e) => {
                                 </button>
                                 
                                 {/* Unarchive Button */}
-                                <button 
+              <button
                                   onClick={() => handleUpdateStatus(invoice, 'paid')}
                                   className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center text-xs"
                                 >
@@ -1104,7 +1109,7 @@ const handlePaymentSubmit = async (e) => {
                                 >
                                   <FaTrash className="mr-1" />
                                   Del
-                                </button>
+              </button>
                               </div>
                             </td>
                           </tr>
@@ -1117,8 +1122,8 @@ const handlePaymentSubmit = async (e) => {
             )}
           </div>
         )}
-      </div>
-      
+            </div>
+            
       {/* Payment Modal */}
       {showPaymentModal && paymentInvoice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1136,7 +1141,7 @@ const handlePaymentSubmit = async (e) => {
               <p className="text-gray-700">
                 <span className="font-medium">Remaining:</span> ${calculateRemainingAmount(paymentInvoice)}
               </p>
-            </div>
+              </div>
             
             <form onSubmit={handlePaymentSubmit}>
               <div className="mb-4">
@@ -1173,14 +1178,14 @@ const handlePaymentSubmit = async (e) => {
               )}
               
               <div className="flex justify-end space-x-3">
-                <button
+                <button 
                   type="button"
                   onClick={() => setShowPaymentModal(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
                 >
                   Cancel
                 </button>
-                <button
+                <button 
                   type="submit"
                   disabled={isUpdating}
                   className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 flex items-center"
@@ -1206,15 +1211,15 @@ const handlePaymentSubmit = async (e) => {
           <div className="bg-white rounded-lg shadow-lg max-w-5xl w-full p-6 m-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Invoice Details</h2>
-              <button
+                <button 
                 onClick={() => setIsModalOpen(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
-            </div>
+                </button>
+              </div>
 
             {/* Tabs for Invoice Details and Customer Payment History */}
             <div className="flex border-b mb-6">
@@ -1224,9 +1229,9 @@ const handlePaymentSubmit = async (e) => {
                 Invoice Details
               </button>
             </div>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
+                <div>
                 <h3 className="text-lg font-semibold mb-2">Invoice Information</h3>
                 <div className="bg-gray-50 p-4 rounded-md">
                   <p className="mb-2">
@@ -1246,8 +1251,8 @@ const handlePaymentSubmit = async (e) => {
                   )}
                 </div>
               </div>
-
-              <div>
+              
+                <div>
                 <h3 className="text-lg font-semibold mb-2">Customer Information</h3>
                 <div className="bg-gray-50 p-4 rounded-md">
                   <p className="mb-2">
@@ -1300,7 +1305,7 @@ const handlePaymentSubmit = async (e) => {
             </div>
 
             {/* Customer Payment History Section */}
-            {selectedInvoice.customer?.email && (
+                  {selectedInvoice.customer?.email && (
               <div className="mb-6">
                 <h3 className="text-lg font-semibold mb-2 flex items-center">
                   <FaHistory className="mr-2 text-blue-500" />
@@ -1327,7 +1332,7 @@ const handlePaymentSubmit = async (e) => {
                         <p className="text-xs text-blue-600/70 mt-1">
                           days on average
                         </p>
-                      </div>
+                </div>
                       
                       {/* Paid On Time */}
                       <div className="bg-green-50 rounded-lg p-4">
@@ -1369,9 +1374,9 @@ const handlePaymentSubmit = async (e) => {
                         <p className="text-xs text-red-600/70 mt-1">
                           overdue invoices
                         </p>
-                      </div>
-                    </div>
-                    
+                </div>
+              </div>
+              
                     {/* Previous Invoices Table */}
                     <div className="bg-white border rounded-md overflow-hidden mb-4">
                       <h4 className="text-sm font-medium p-4 border-b">Previous Invoices</h4>
@@ -1386,14 +1391,14 @@ const handlePaymentSubmit = async (e) => {
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                              </tr>
-                            </thead>
+                    </tr>
+                  </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {customerPaymentHistory.map((invoice) => (
                                 <tr key={invoice.id} className="hover:bg-gray-50">
                                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {invoice.invoiceNumber || invoice.id.substring(0, 6)}
-                                  </td>
+                        </td>
                                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                     {formatDate(invoice.createdAt)}
                                   </td>
@@ -1435,10 +1440,10 @@ const handlePaymentSubmit = async (e) => {
                                         Pending
                                       </span>
                                     )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
                           </table>
                         </div>
                       ) : (
@@ -1478,8 +1483,8 @@ const handlePaymentSubmit = async (e) => {
                                     <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
                                       {payment.status || 'Completed'}
                                     </span>
-                                  </td>
-                                </tr>
+                      </td>
+                    </tr>
                               ))}
                             </tbody>
                           </table>
@@ -1511,7 +1516,7 @@ const handlePaymentSubmit = async (e) => {
                           {part.description && (
                             <div className="text-xs text-gray-500">{part.description}</div>
                           )}
-                        </td>
+                      </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{part.quantity || 1}</div>
                         </td>
@@ -1522,14 +1527,14 @@ const handlePaymentSubmit = async (e) => {
                           <div className="text-sm text-gray-900">
                             ${((parseFloat(part.price) || 0) * (parseInt(part.quantity) || 1)).toFixed(2)}
                           </div>
-                        </td>
-                      </tr>
+                      </td>
+                    </tr>
                     ))}
                     {(!selectedInvoice.parts || selectedInvoice.parts.length === 0) && (
                       <tr>
                         <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">
                           No parts or services listed
-                        </td>
+                      </td>
                       </tr>
                     )}
                   </tbody>
@@ -1557,8 +1562,8 @@ const handlePaymentSubmit = async (e) => {
                   </tfoot>
                 </table>
               </div>
-            </div>
-
+              </div>
+              
             <div className="flex flex-wrap gap-3 justify-end">
               <button 
                 onClick={() => handleEditInvoice(selectedInvoice)} 
@@ -1608,33 +1613,33 @@ const handlePaymentSubmit = async (e) => {
                   <FaTools className="mr-2" />
                   Warranty
                 </button>
-              </div>
+                </div>
               
-              <button
+                <button
                 onClick={() => {
                   setIsModalOpen(false);
-                  generatePDF(selectedInvoice);
-                }}
+                    generatePDF(selectedInvoice);
+                  }}
                 className="px-4 py-2 bg-purple-600 text-white rounded-md flex items-center"
-              >
-                <FaFileDownload className="mr-2" />
-                Download PDF
-              </button>
-              <button 
+                >
+                  <FaFileDownload className="mr-2" />
+                  Download PDF
+                </button>
+                <button
                 onClick={() => {
                   if (window.confirm('Are you sure you want to delete this invoice?')) {
                     setIsModalOpen(false);
                     handleDeleteInvoice(selectedInvoice.id);
                   }
-                }} 
+                  }}
                 className="px-4 py-2 bg-red-600 text-white rounded-md flex items-center"
-              >
-                <FaTrash className="mr-2" />
+                >
+                  <FaTrash className="mr-2" />
                 Delete
-              </button>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
       )}
 
       {/* Edit Invoice Modal - Improved UI */}
@@ -1649,7 +1654,7 @@ const handlePaymentSubmit = async (e) => {
               >
                 <FaTimes className="w-6 h-6" />
               </button>
-            </div>
+        </div>
             
             <div className="mb-6 bg-gray-50 p-4 rounded-lg">
               <label className="block text-sm font-medium text-gray-700 mb-2">Invoice Title</label>

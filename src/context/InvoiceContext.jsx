@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../AuthContext';
+import { toast } from 'react-toastify';
 
 // Create the context
 const InvoiceContext = createContext();
@@ -11,15 +12,20 @@ export function InvoiceProvider({ children }) {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
   // Function to load invoices
   const loadInvoices = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
+    setError(null);
+    
     try {
-      console.log('InvoiceContext: Loading invoices...');
       const invoicesRef = collection(db, 'users', user.uid, 'invoices');
       const invoiceSnapshot = await getDocs(invoicesRef);
       
@@ -29,21 +35,23 @@ export function InvoiceProvider({ children }) {
         invoiceList.push({
           id: doc.id,
           ...data,
-          paidAmount: typeof data.paidAmount !== 'undefined' ? parseFloat(data.paidAmount) : 0
+          paidAmount: typeof data.paidAmount !== 'undefined' ? parseFloat(data.paidAmount) : 0,
+          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt || Date.now())
         });
       });
       
       // Sort by date (most recent first)
       invoiceList.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+        const dateA = a.createdAt || new Date(0);
+        const dateB = b.createdAt || new Date(0);
         return dateB - dateA;
       });
       
       setInvoices(invoiceList);
-      console.log('InvoiceContext: Loaded', invoiceList.length, 'invoices');
     } catch (error) {
-      console.error('Error loading invoices in context:', error);
+      console.error('Error loading invoices:', error);
+      setError(error);
+      toast.error('Failed to load invoices. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -56,16 +64,14 @@ export function InvoiceProvider({ children }) {
 
   // Load invoices when the user changes or lastUpdate changes
   useEffect(() => {
-    if (user) {
-      loadInvoices();
-    }
+    loadInvoices();
   }, [user, lastUpdate]);
 
-  // The value to be provided to consumers
   const value = {
     invoices,
     setInvoices,
     loading,
+    error,
     refreshInvoices,
     loadInvoices
   };
@@ -84,4 +90,4 @@ export function useInvoices() {
     throw new Error('useInvoices must be used within an InvoiceProvider');
   }
   return context;
-} 
+}

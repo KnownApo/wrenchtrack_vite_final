@@ -13,13 +13,42 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log('Auth state changed:', currentUser); // Log the user object
+    let tokenRefreshInterval;
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log('Auth state changed:', currentUser);
+      if (currentUser) {
+        try {
+          // Force token refresh on sign-in
+          await currentUser.getIdToken(true);
+          
+          // Set up periodic token refresh every 30 minutes
+          tokenRefreshInterval = setInterval(async () => {
+            try {
+              await currentUser.getIdToken(true);
+            } catch (error) {
+              console.error('Token refresh failed:', error);
+            }
+          }, 30 * 60 * 1000); // 30 minutes
+        } catch (error) {
+          console.error('Initial token refresh failed:', error);
+        }
+      } else {
+        // Clear token refresh interval when user signs out
+        if (tokenRefreshInterval) {
+          clearInterval(tokenRefreshInterval);
+        }
+      }
       setUser(currentUser);
       setLoading(false);
     });
 
-    return unsubscribe; // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+      if (tokenRefreshInterval) {
+        clearInterval(tokenRefreshInterval);
+      }
+    };
   }, []);
 
   const value = { user };

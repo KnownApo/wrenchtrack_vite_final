@@ -1,25 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { auth, db } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { AuthProvider, useAuth } from './AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { InvoiceProvider } from './context/InvoiceContext';
+import setupLaborGuide from './utils/setupLaborGuide';
+import ErrorBoundary from './components/ErrorBoundary';
+import firebaseService from './services/firebaseService';
+import ToastSetup from './components/ToastSetup';
+
+// Import all screen components
+import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
-import HomeScreen from './screens/HomeScreen';
 import InvoiceScreen from './screens/InvoiceScreen';
 import InvoiceHistoryScreen from './screens/InvoiceHistoryScreen';
 import VehicleServiceRecordsScreen from './screens/VehicleServiceRecordsScreen';
 import PaymentScreen from './screens/PaymentScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import { auth, db } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { AuthProvider, useAuth } from './AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-import { InvoiceProvider } from './context/InvoiceContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import firebaseService from './services/firebaseService';
-import { setupLaborGuide } from './utils/setupLaborGuide';
+// Fix the import to point to the correct location
 import LaborGuideDebugger from './utils/laborGuideDebugger';
 
-// Simple ForgotPasswordScreen component
+// Simple ForgotPasswordScreen component that uses useNavigate correctly
 function ForgotPasswordScreen() {
   const navigate = useNavigate();
   
@@ -72,8 +78,7 @@ function ForgotPasswordScreen() {
 // PrivateRoute component for protected routes
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
-
+  
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -85,81 +90,38 @@ function PrivateRoute({ children }) {
   return children;
 }
 
-function App() {
-  return (
-    <Router>
-      <ErrorBoundary>
-        <AuthProvider>
-          <ThemeProvider>
-            <InvoiceProvider>
-              <AppContent />
-            </InvoiceProvider>
-          </ThemeProvider>
-        </AuthProvider>
-      </ErrorBoundary>
-    </Router>
-  );
-}
-
-function AppContent() {
+const AppContent = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const { user, loading } = useAuth();
-  const [theme, setTheme] = useState('light'); // Default theme
-  const [isSettingUpLaborGuide, setIsSettingUpLaborGuide] = useState(false);
-  
-  // Handle manual setup of labor guide data
-  const handleSetupLaborGuide = async () => {
-    if (!user) return;
-    
-    try {
-      setIsSettingUpLaborGuide(true);
-      const result = await setupLaborGuide();
-      if (result) {
-        alert("Labor guide setup complete! Sample operations added.");
-      } else {
-        alert("Labor guide data already exists.");
-      }
-    } catch (error) {
-      console.error("Error setting up labor guide:", error);
-      alert("Error setting up labor guide. Check console for details.");
-    } finally {
-      setIsSettingUpLaborGuide(false);
-    }
-  };
-  
-  // Initialize user documents when logged in
+
+  // Initialize error handler
   useEffect(() => {
-    const initializeUser = async () => {
-      if (user) {
-        try {
-          // Ensure user documents are initialized
-          await firebaseService.initializeUserDocuments();
-          
-          // Initialize labor guide data if needed
-          await setupLaborGuide();
-        } catch (error) {
-          console.error("Error initializing user documents:", error);
-        }
-      }
-    };
-
-    if (user && !loading) {
-      initializeUser();
-    }
-
-    // Cleanup when unmounting
-    return () => {
-      if (user) {
-        try {
-          firebaseService.cleanup();
-        } catch (error) {
-          console.error("Error cleaning up:", error);
-        }
-      }
-    };
-  }, [user, loading]);
+    import('./utils/errorInterceptor')
+      .then(({ attachErrorHandler }) => {
+        attachErrorHandler();
+      })
+      .catch(error => {
+        console.error('Failed to initialize error handler:', error);
+      });
+  }, []);
 
   return (
-    <div className={`app ${theme}`}>
+    <>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
+      {/* Rest of your app content */}
+      {/* ...existing code... */}
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginScreen />} />
@@ -172,8 +134,8 @@ function AppContent() {
         <Route path="/customers" element={<PrivateRoute><HomeScreen activePage="customers" /></PrivateRoute>} />
         <Route path="/job" element={<PrivateRoute><HomeScreen activePage="job" /></PrivateRoute>} />
         <Route path="/parts" element={<PrivateRoute><HomeScreen activePage="parts" /></PrivateRoute>} />
-        <Route path="/invoice" element={<PrivateRoute><InvoiceScreen /></PrivateRoute>} />
-        <Route path="/invoicehistory" element={<PrivateRoute><InvoiceHistoryScreen /></PrivateRoute>} />
+        <Route path="/invoice" element={<PrivateRoute><ErrorBoundary><InvoiceScreen /></ErrorBoundary></PrivateRoute>} />
+        <Route path="/invoicehistory" element={<PrivateRoute><ErrorBoundary><InvoiceHistoryScreen /></ErrorBoundary></PrivateRoute>} />
         <Route path="/service-records" element={<PrivateRoute><VehicleServiceRecordsScreen /></PrivateRoute>} />
         <Route path="/payment" element={<PrivateRoute><PaymentScreen /></PrivateRoute>} />
         <Route path="/settings" element={<PrivateRoute><SettingsScreen /></PrivateRoute>} />
@@ -184,9 +146,26 @@ function AppContent() {
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-    </div>
+    </>
   );
-}
+};
+
+const App = () => {
+  return (
+    <Router>
+      <AuthProvider>
+        <ThemeProvider>
+          <ErrorBoundary>
+            <InvoiceProvider>
+              <ToastSetup />
+              <AppContent />
+            </InvoiceProvider>
+          </ErrorBoundary>
+        </ThemeProvider>
+      </AuthProvider>
+    </Router>
+  );
+};
 
 export default App;
 

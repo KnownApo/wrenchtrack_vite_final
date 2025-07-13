@@ -7,26 +7,9 @@ import {
   collection,
   query,
   getDocs,
-  serverTimestamp,
-  enableIndexedDbPersistence,
-  enableNetwork,
-  disableNetwork
+  serverTimestamp
 } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-
-// Try to enable persistence for offline capabilities
-try {
-  enableIndexedDbPersistence(db)
-    .catch((err) => {
-      if (err.code === 'failed-precondition') {
-        console.warn('Persistence could not be enabled - multiple tabs open');
-      } else if (err.code === 'unimplemented') {
-        console.warn('Persistence not supported on this browser');
-      }
-    });
-} catch (error) {
-  console.warn('Error setting up persistence:', error);
-}
 
 class FirebaseService {
   constructor() {
@@ -34,30 +17,88 @@ class FirebaseService {
     this.isInitialized = false;
     this.cachedSettings = null;
     this.settingsLastFetched = 0;
+    this.initializationPromise = null;
+    this.maxRetries = 3;
+    this.retryDelay = 1000;
+    this.hadPermissionIssue = false;
   }
-  
-  // Initialize user documents - creates default documents if they don't exist
+
+  async ensureInitialized() {
+    if (this.isInitialized) return true;
+    if (this.initializationPromise) return this.initializationPromise;
+
+    this.initializationPromise = this.initializeWithRetry();
+    const result = await this.initializationPromise;
+    this.initializationPromise = null;
+    return result;
+  }
+
+  async initializeWithRetry() {
+    let retries = this.maxRetries;
+    while (retries > 0) {
+      try {
+        await this.waitForAuth();
+        const result = await this.initializeUserDocuments();
+        this.isInitialized = result;
+        return result;
+      } catch (error) {
+        retries--;
+        console.warn(`Initialization attempt failed (${retries} retries left):`, error);
+        if (retries === 0) {
+          this.isInitialized = false;
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+        this.retryDelay *= 2; // Exponential backoff
+      }
+    }
+    return false;
+  }
+
+  async waitForAuth() {
+    if (!auth.currentUser) {
+      return new Promise((resolve) => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          if (user) {
+            unsubscribe();
+            resolve(true);
+          }
+        });
+        // Add timeout to prevent hanging
+        setTimeout(() => {
+          unsubscribe();
+          resolve(false);
+        }, 10000); // 10 second timeout
+      });
+    }
+    return true;
+  }
+
   async initializeUserDocuments() {
     try {
       const user = auth.currentUser;
       if (!user) {
         console.log('No user logged in when initializing documents');
-        return null;
+        return false;
       }
-      
-      if (this.isInitialized) {
-        console.log('User documents already initialized');
-        return true;
+
+      // Create base user document if it doesn't exist
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          email: user.email,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
       }
-      
-      console.log(`Initializing documents for user: ${user.uid}`);
-      
-      // Create settings document if it doesn't exist
+
+      // Create or get settings document
       const settingsRef = doc(db, 'users', user.uid, 'settings', 'userSettings');
       const settingsDoc = await getDoc(settingsRef);
-      
+
       if (!settingsDoc.exists()) {
-        console.log('Settings document does not exist, creating...');
         const defaultSettings = {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -98,34 +139,118 @@ class FirebaseService {
             paymentMethod: 'None'
           }
         };
-        
+
         await setDoc(settingsRef, defaultSettings);
-        console.log('Settings document created successfully');
-        
-        // Cache the default settings
         this.cachedSettings = defaultSettings;
         this.settingsLastFetched = Date.now();
       } else {
-        console.log('Settings document exists');
-        // Cache the existing settings
-        const data = settingsDoc.data();
-        this.cachedSettings = data;
+        this.cachedSettings = settingsDoc.data();
         this.settingsLastFetched = Date.now();
       }
-      
+
       this.isInitialized = true;
       return true;
     } catch (error) {
       console.error("Error initializing user documents:", error);
+      this.isInitialized = false;
+      
+      if (error.code === 'permission-denied') {
+        await this.handlePermissionError(error, 'initialization');
+      } else {
+        toast.error('Failed to initialize user data. Please try logging out and back in.');
+      }
+      
+      throw error;
+    }
+  }
+
+  // Get settings document from Firestore, with cache management and error handling
+  async getSettingsDoc(useCache = true) {
+    try {
+      await this.ensureInitialized();
+      
+      const user = auth.currentUser;
+      if (!user) {
+        console.log('No user logged in when getting settings');
+        return null;
+      }
+      
+      // Return cached settings if available and valid
+      const cacheAge = Date.now() - this.settingsLastFetched;
+      if (useCache && this.cachedSettings && cacheAge < 300000) { // 5 minutes
+        return this.cachedSettings;
+      }
+
+      const settingsRef = doc(db, 'users', user.uid, 'settings', 'userSettings');
+      const docSnap = await getDoc(settingsRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const processedData = this.processTimestamps(data);
+        this.cachedSettings = processedData;
+        this.settingsLastFetched = Date.now();
+        return processedData;
+      }
+      
+      // If no settings exist, try to initialize
+      await this.initializeUserDocuments();
+      return this.cachedSettings;
+    } catch (error) {
+      console.error('Error fetching settings document:', error);
+      if (error.code === 'permission-denied') {
+        await this.handlePermissionError(error, 'fetching settings');
+      }
+      return this.cachedSettings || null;
+    }
+  }
+
+  processTimestamps(data) {
+    if (!data) return data;
+    
+    const processed = { ...data };
+    Object.keys(processed).forEach((key) => {
+      if (processed[key] && typeof processed[key].toDate === 'function') {
+        processed[key] = processed[key].toDate().toISOString();
+      } else if (processed[key] && typeof processed[key] === 'object') {
+        processed[key] = this.processTimestamps(processed[key]);
+      }
+    });
+    
+    return processed;
+  }
+  async handlePermissionError(error, operation) {
+    console.warn(`Permission denied during ${operation}:`, error);
+    this.hadPermissionIssue = true;
+    
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('No user logged in');
+      }
+      
+      // Force token refresh
+      await user.getIdToken(true);
+      
+      // Verify the token was refreshed
+      const newToken = await user.getIdToken();
+      if (!newToken) {
+        throw new Error('Failed to obtain new token');
+      }
+      
+      this.hadPermissionIssue = false;
+      toast.success('Permissions refreshed successfully');
+      return true;
+    } catch (refreshError) {
+      console.error('Failed to refresh token:', refreshError);
+      toast.error('Permission error. Please try logging out and back in.', {
+        toastId: 'permission-error',
+        autoClose: 5000
+      });
       return false;
     }
   }
 
-  // Cleanup function to remove listeners and perform cleanup
   cleanup() {
-    console.log('Cleaning up Firebase service');
-    
-    // Unsubscribe from any active listeners
     this.unsubscribers.forEach(unsubscribe => {
       if (typeof unsubscribe === 'function') {
         unsubscribe();
@@ -136,176 +261,9 @@ class FirebaseService {
     this.isInitialized = false;
     this.cachedSettings = null;
     this.settingsLastFetched = 0;
+    this.initializationPromise = null;
     
     return true;
-  }
-
-  // Get settings document from Firestore, with cache management
-  async getSettingsDoc(useCache = true) {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        console.log('No user logged in when getting settings');
-        return null;
-      }
-      
-      // Return cached settings if available and useCache is true and cache is fresh (less than 5 minutes old)
-      const cacheAge = Date.now() - this.settingsLastFetched;
-      if (useCache && this.cachedSettings && cacheAge < 300000) { // 5 minutes
-        console.log('Returning cached settings (age: ' + (cacheAge/1000).toFixed(1) + 's)');
-        return this.cachedSettings;
-      }
-      
-      console.log('Fetching fresh settings from Firestore');
-      
-      // Create path to user settings document
-      const settingsRef = doc(db, 'users', user.uid, 'settings', 'userSettings');
-      
-      // Get document from Firestore
-      const docSnap = await getDoc(settingsRef);
-      
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        
-        // Process timestamps if needed
-        const processedData = this.processTimestamps(data);
-        
-        this.cachedSettings = processedData; // Update cache
-        this.settingsLastFetched = Date.now();
-        
-        console.log('Settings loaded successfully from Firestore');
-        return processedData;
-      } else {
-        console.log('No settings document exists, will initialize');
-        
-        // Initialize user documents which will create default settings
-        await this.initializeUserDocuments();
-        
-        // Try to get the settings again
-        const newSettingsSnap = await getDoc(settingsRef);
-        if (newSettingsSnap.exists()) {
-          const data = newSettingsSnap.data();
-          this.cachedSettings = data;
-          this.settingsLastFetched = Date.now();
-          return data;
-        }
-        
-        return null;
-      }
-    } catch (error) {
-      console.error('Error fetching settings document:', error);
-      
-      // Handle permission errors differently
-      if (error.code === 'permission-denied') {
-        toast.error('Permission denied - please check your account permissions', {
-          toastId: 'permission-denied'
-        });
-      }
-      
-      return this.cachedSettings || null; // Return cached settings as fallback
-    }
-  }
-
-  // Process any Firestore timestamps in the document
-  processTimestamps(data) {
-    if (!data) return data;
-    
-    const processed = { ...data };
-    
-    // Convert any timestamp objects to ISO strings for easier handling
-    Object.keys(processed).forEach(key => {
-      if (processed[key] && typeof processed[key].toDate === 'function') {
-        processed[key] = processed[key].toDate().toISOString();
-      } else if (processed[key] && typeof processed[key] === 'object') {
-        processed[key] = this.processTimestamps(processed[key]);
-      }
-    });
-    
-    return processed;
-  }
-
-  // Update settings document
-  async updateSettingsDocument(data) {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        console.log('No user logged in when updating settings');
-        return false;
-      }
-      
-      // Reference to user settings doc
-      const settingsRef = doc(db, 'users', user.uid, 'settings', 'userSettings');
-      
-      // Add timestamp to updates
-      const updatedData = {
-        ...data,
-        updatedAt: serverTimestamp()
-      };
-      
-      console.log('Updating settings document with:', updatedData);
-      
-      try {
-        // Use merge: true to only update specified fields
-        await setDoc(settingsRef, updatedData, { merge: true });
-        console.log('Settings document updated successfully');
-        
-        // Update the cache with the new settings
-        if (this.cachedSettings) {
-          this.cachedSettings = {
-            ...this.cachedSettings,
-            ...data,
-            updatedAt: new Date().toISOString() // Use ISO string as our cached timestamps are processed
-          };
-          this.settingsLastFetched = Date.now();
-        }
-        
-        return true;
-      } catch (error) {
-        console.error('Error updating settings document:', error);
-        this.handleFirestoreError(error);
-        return false;
-      }
-    } catch (error) {
-      console.error('General error in updateSettingsDocument:', error);
-      this.handleFirestoreError(error);
-      return false;
-    }
-  }
-
-  // Specific error handler for Firestore errors
-  handleFirestoreError(error) {
-    switch (error.code) {
-      case 'permission-denied':
-        toast.error('Permission denied. Please check your account permissions.', {
-          toastId: 'permission-denied-error'
-        });
-        break;
-      case 'unavailable':
-        toast.error('Service temporarily unavailable. Please try again later.', {
-          toastId: 'service-unavailable'
-        });
-        break;
-      case 'unauthenticated':
-        toast.error('Authentication required. Please log in again.', {
-          toastId: 'auth-required'
-        });
-        break;
-      default:
-        toast.error('An error occurred with the database. Please try again.', {
-          toastId: 'generic-error'
-        });
-    }
-  }
-  
-  // Get user avatar
-  async getUserAvatar() {
-    try {
-      const settings = await this.getSettingsDoc(true);
-      return settings?.avatar || '';
-    } catch (error) {
-      console.error('Error getting user avatar:', error);
-      return '';
-    }
   }
 }
 

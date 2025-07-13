@@ -88,6 +88,16 @@ const SettingsScreen = () => {
       }
       
       setIsLoading(true);
+      
+      // Force token refresh before loading settings
+      try {
+        await user.getIdToken(true);
+      } catch (refreshError) {
+        console.error('Failed to refresh token:', refreshError);
+        toast.error('Please try logging out and back in');
+        return;
+      }
+      
       console.log('Loading settings from Firestore for user:', user.uid);
       
       // First try to initialize user documents if not already done
