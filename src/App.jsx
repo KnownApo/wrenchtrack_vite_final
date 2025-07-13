@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -26,12 +26,12 @@ import PaymentScreen from './screens/PaymentScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 
-function PrivateRoute({ children }) {
+const ProtectedLayout = () => {
   const { user, loading } = useAuth();
-  
   if (loading) return <LoadingSpinner />;
-  return user ? children : <Navigate to="/login" replace />;
-}
+  if (!user) return <Navigate to="/login" replace />;
+  return <Outlet />;
+};
 
 const router = createBrowserRouter([
   {
@@ -47,22 +47,27 @@ const router = createBrowserRouter([
     element: <ForgotPasswordScreen />,
   },
   {
-    path: "/",
-    element: <PrivateRoute><HomeScreen /></PrivateRoute>,
+    element: <ProtectedLayout />,
     children: [
-      { index: true, element: <DashboardScreen /> },
-      { path: "invoices", element: <InvoiceScreen /> },
-      { path: "invoices/:id", element: <InvoiceDetailScreen /> },
-      { path: "history", element: <InvoiceHistoryScreen /> },
-      { path: "customers", element: <CustomersScreen /> },
-      { path: "customers/:id/history", element: <CustomerHistoryScreen /> },
-      { path: "vehicles", element: <VehiclesScreen /> },
-      { path: "vehicles/:id/service-records", element: <VehicleServiceRecordsScreen /> },
-      { path: "parts", element: <PartsScreen /> },
-      { path: "jobs", element: <JobTimerScreen /> },
-      { path: "settings", element: <SettingsScreen /> },
-      { path: "analytics", element: <AnalyticsScreen /> },
-      { path: "payments/:invoiceId", element: <PaymentScreen /> },
+      {
+        path: "/",
+        element: <HomeScreen />,
+        children: [
+          { index: true, element: <DashboardScreen /> },
+          { path: "invoices", element: <InvoiceScreen /> },
+          { path: "invoices/:id", element: <InvoiceDetailScreen /> },
+          { path: "history", element: <InvoiceHistoryScreen /> },
+          { path: "customers", element: <CustomersScreen /> },
+          { path: "customers/:id/history", element: <CustomerHistoryScreen /> },
+          { path: "vehicles", element: <VehiclesScreen /> },
+          { path: "vehicles/:id/service-records", element: <VehicleServiceRecordsScreen /> },
+          { path: "parts", element: <PartsScreen /> },
+          { path: "jobs", element: <JobTimerScreen /> },
+          { path: "settings", element: <SettingsScreen /> },
+          { path: "analytics", element: <AnalyticsScreen /> },
+          { path: "payments/:invoiceId", element: <PaymentScreen /> },
+        ],
+      },
     ],
   },
   {
