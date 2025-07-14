@@ -1,137 +1,62 @@
-# WrenchTrack
+<div align="center">
 
-A modern web application for tracking and managing mechanical service records. WrenchTrack helps mechanics and vehicle owners maintain detailed service histories, schedule maintenance, and track repairs efficiently.
+# 🚀 WrenchTrack
 
-## Features
+**Modern, full-stack workshop & invoice manager**  
+Built with **React 18, Vite, Firebase, Tailwind CSS & Chart.js**  
 
-- User Authentication & Authorization
-  - Secure login and registration
-  - Role-based access control
-  - JWT token authentication
-- Vehicle Management
-  - Add and manage multiple vehicles
-  - Track vehicle details and history
-  - Store important documents and photos
-- Service Records
-  - Create detailed service entries
-  - Track parts and labor costs
-  - Maintain service history
-- Maintenance Scheduling
-  - Set service reminders
-  - Automated maintenance notifications
-  - Service interval tracking
-- Reporting & Analytics
-  - Cost analysis reports
-  - Service history exports
-  - Maintenance predictions
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](#-license)
+[![Build](https://img.shields.io/github/actions/workflow/status/yourusername/wrenchtrack/ci.yml?label=build)](https://github.com/yourusername/wrenchtrack/actions)
+[![Demo](https://img.shields.io/badge/demo-live-green?logo=vercel)](https://wrenchtrack.vercel.app)
 
-## Technologies Used
+</div>
 
-- Frontend
-  - React 18
-  - Vite
-  - TailwindCSS
-  - React Router v6
-  - React Query
-  - Axios
-- Backend
-  - Node.js
-  - Express
-  - MongoDB
-  - JWT Authentication
-- Testing
-  - Jest
-  - React Testing Library
-- DevOps
-  - Docker
-  - GitHub Actions
+---
 
-## Getting Started
+## ✨ Why WrenchTrack?
 
-### Prerequisites
+* **All-in-one dashboard** – invoices, parts, vehicles, customers, analytics.
+* **Realtime sync** with Firebase v10 (no refreshes).
+* **Dark / light theme** with a single click.
+* **PWA-ready** – install it on tablets in the shop.
+* **Granular role control** – techs, service writers, owners.
+* **Zero config deploy** – push to Vercel or Netlify and you’re online.
 
-- Node.js (v16 or higher)
-- npm or yarn
-- MongoDB (local or Atlas connection)
+<p align="center">
+  <img src="docs/readme/dashboard-light.png" width="45%" alt="Dashboard light mode"/>
+  <img src="docs/readme/dashboard-dark.png" width="45%" alt="Dashboard dark mode"/>
+</p>
 
-### Installation
+---
 
-1. Clone the repository
+## ⚙️ Tech Stack
+
+| Layer            | What we use                                |
+|------------------|--------------------------------------------|
+| **Frontend**     | React 18 · Vite · Tailwind CSS · Lucide icons · Framer Motion |
+| **Data / API**   | Firebase Auth & Firestore 10 · Cloud Functions (optional) |
+| **State**        | TanStack Query · React Context hooks (`useAuth`, `useInvoice`, `useTheme`, `useJobLog`) |
+| **Charts**       | Chart.js 4 + `react-chartjs-2` |
+| **Testing**      | Jest · React-Testing-Library |
+| **CI / CD**      | GitHub Actions · Vercel preview deploys |
+| **Lint / Format**| ESLint · Prettier · Husky pre-commit hooks |
+
+---
+
+## 🚀 Quick Start
+
 ```bash
 git clone https://github.com/yourusername/wrenchtrack.git
 cd wrenchtrack_vite_final
-```
 
-2. Install dependencies
-```bash
-npm install
-```
+# 1 Install
+npm i          # or pnpm i / yarn
 
-3. Configure environment variables
-```bash
+# 2 Config ⬇
 cp .env.example .env
-# Edit .env with your configurations
-```
+# → add your Firebase keys + optional envs
 
-4. Start the development server
-```bash
+# 3 Dev server
 npm run dev
-```
 
-The application will be available at `http://localhost:5173`
-
-## Project Structure
-
-```
-wrenchtrack_vite_final/
-├── src/
-│   ├── components/         # Reusable UI components
-│   ├── pages/             # Page components
-│   ├── hooks/             # Custom React hooks
-│   ├── services/          # API services
-│   ├── utils/             # Utility functions
-│   ├── context/           # React context providers
-│   ├── styles/            # Global styles
-│   └── types/             # TypeScript definitions
-├── public/                # Static assets
-├── tests/                 # Test files
-└── docs/                  # Documentation
-```
-
-## API Documentation
-
-API documentation is available at `/api-docs` when running the development server.
-
-## Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run test` - Run tests
-- `npm run lint` - Lint code
-- `npm run format` - Format code
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and development process.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-Michael - michael@wrenchtrack.com
-Project Link: https://github.com/yourusername/wrenchtrack
-
-## Acknowledgments
-
-- [React Documentation](https://react.dev)
-- [Vite](https://vitejs.dev)
-- [TailwindCSS](https://tailwindcss.com)
-- [MongoDB](https://www.mongodb.com)
+# open http://localhost:5173 💥
