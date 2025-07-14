@@ -10,7 +10,7 @@ import InvoiceList from '../components/InvoiceList';
 import InvoiceStatusChart from '../components/InvoiceStatusChart';
 import RecentActivity from '../components/RecentActivity';
 import QuickActions from '../components/QuickActions';
-
+import { toDateSafe } from '../utils/date';
 export default function DashboardScreen() {
   const navigate = useNavigate();
   const { invoices, loading: invoicesLoading, error: invoicesError } = useInvoice(); // Updated hook name
@@ -42,11 +42,11 @@ export default function DashboardScreen() {
           const invoicesRef = collection(db, 'users', auth.currentUser.uid, 'invoices');
           const q = query(invoicesRef, where('status', '!=', 'deleted'), orderBy('createdAt', 'desc'));
           const querySnapshot = await getDocs(q);
-          invoiceData = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            dueDate: doc.data().dueDate?.toDate() || new Date(),
+          invoiceData = querySnapshot.docs.map(d => ({
+            id: d.id,
+            ...d.data(),
+            createdAt: toDateSafe(d.data().createdAt),
+            dueDate:   toDateSafe(d.data().dueDate),
           }));
         }
 

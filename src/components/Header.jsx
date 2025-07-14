@@ -1,39 +1,40 @@
-import React from 'react';
-import { FaBars, FaBell, FaUserCircle, FaSearch } from 'react-icons/fa';
+import React from "react";
+import { Menu, Bell, UserCircle, Search } from "lucide-react";
 
-export default function Header({ toggleSidebar, notifications = [], userProfile }) {
-  const unreadCount = notifications.filter(n => !n.read).length;
-
+export default function Header({ toggleSidebar }) {
   return (
-    <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex items-center justify-between">
-      <button onClick={toggleSidebar} className="text-gray-900 dark:text-white md:hidden">
-        <FaBars size={24} />
+    <header className="flex items-center gap-4 px-6 py-4 bg-white dark:bg-gray-800 shadow-md">
+      <button
+        className="lg:hidden text-gray-700 dark:text-gray-200"
+        onClick={toggleSidebar}
+      >
+        <Menu size={24} />
       </button>
-      <div className="flex-1 mx-4">
-        <div className="relative max-w-md">
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full p-2 pl-8 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500 focus:border-blue-500"
-          />
-          <FaSearch className="absolute left-2 top-3 text-gray-400" />
-        </div>
+
+      <div className="relative flex-1 max-w-lg">
+        <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">
+          <Search size={18} />
+        </span>
+        <input
+          type="search"
+          placeholder="Quick search..."
+          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300
+                     dark:border-gray-700 bg-gray-50 dark:bg-gray-700
+                     text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
       </div>
-      <div className="flex items-center space-x-4">
-        <div className="relative">
-          <button className="text-gray-900 dark:text-white">
-            <FaBell size={24} />
-            {unreadCount > 0 && (
-              <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        </div>
-        <button onClick={userProfile} className="text-gray-900 dark:text-white">
-          <FaUserCircle size={24} />
-        </button>
-      </div>
+
+      <button className="relative text-gray-700 dark:text-gray-200">
+        <Bell size={22} />
+        <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-600
+                         text-white text-[10px] flex items-center justify-center">
+          3
+        </span>
+      </button>
+
+      <button className="ml-2 text-gray-700 dark:text-gray-200">
+        <UserCircle size={24} />
+      </button>
     </header>
   );
 }

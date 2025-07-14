@@ -1,54 +1,54 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { FaHome, FaFileInvoice, FaUsers, FaCar, FaTools, FaCog, FaChartBar } from 'react-icons/fa';  // Icons for menu items
+import React from "react";
+import { NavLink } from "react-router-dom";
+import {
+  Home, FileText, Users, Truck, Settings, BarChart2, Clock, Package,
+} from "lucide-react";
+import { motion } from "framer-motion";
 
-const Sidebar = ({ isOpen, toggleSidebar }) => {
-  // Define default menu items array to prevent undefined 'map' error
-  const menuItems = [
-    { path: '/', name: 'Dashboard', icon: <FaHome /> },
-    { path: '/invoices', name: 'Invoices', icon: <FaFileInvoice /> },
-    { path: '/history', name: 'Invoice History', icon: <FaFileInvoice /> },
-    { path: '/customers', name: 'Customers', icon: <FaUsers /> },
-    { path: '/vehicles', name: 'Vehicles', icon: <FaCar /> },
-    { path: '/parts', name: 'Parts', icon: <FaTools /> },
-    { path: '/jobs', name: 'Jobs', icon: <FaTools /> },
-    { path: '/settings', name: 'Settings', icon: <FaCog /> },
-    { path: '/analytics', name: 'Analytics', icon: <FaChartBar /> },
-  ];
+const links = [
+  { to: "/",          label: "Dashboard", icon: <Home size={18} /> },
+  { to: "/invoices",  label: "Invoices",  icon: <FileText size={18} /> },
+  { to: "/customers", label: "Customers", icon: <Users size={18} /> },
+  { to: "/vehicles",  label: "Vehicles",  icon: <Truck size={18} /> },
+  { to: "/parts",     label: "Parts",     icon: <Package size={18} /> },
+  { to: "/analytics", label: "Analytics", icon: <BarChart2 size={18} /> },
+  { to: "/jobs",      label: "Job Timer", icon: <Clock size={18} /> },
+  { to: "/settings",  label: "Settings",  icon: <Settings size={18} /> },
+];
 
+export default function Sidebar({ open, onClose, className = "" }) {
   return (
-    <aside 
-      className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      } md:relative md:translate-x-0`}
+    <motion.aside
+      initial={{ x: -260 }}
+      animate={{ x: open ? 0 : -260 }}
+      transition={{ type: "tween", duration: 0.2 }}
+      className={`fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800
+                  shadow-lg flex flex-col ${className} lg:static lg:translate-x-0`}
     >
-      <div className="flex flex-col h-full">
-        <div className="p-4 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">WrenchTrack</h2>
-        </div>
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                      isActive ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'
-                    }`
-                  }
-                  onClick={() => toggleSidebar(false)}  // Close sidebar on mobile after click
-                >
-                  {item.icon}
-                  <span className="ml-3">{item.name}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
+      <div className="px-6 py-4 font-extrabold text-xl tracking-tight text-brand-600">
+        WrenchTrack
       </div>
-    </aside>
-  );
-};
 
-export default Sidebar;
+      <nav className="flex-1 overflow-y-auto">
+        {links.map(({ to, label, icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            onClick={onClose}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-6 py-3 border-l-4 text-sm font-medium
+               transition-colors ${
+                 isActive
+                   ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900 dark:text-brand-200"
+                   : "border-transparent hover:bg-gray-100 dark:hover:bg-gray-700"
+               }`
+            }
+          >
+            {icon}
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+    </motion.aside>
+  );
+}
