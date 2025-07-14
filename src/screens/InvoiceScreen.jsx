@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { JobLogContext } from '../context/JobLogContext';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -10,9 +10,11 @@ import firebaseService from '../services/firebaseService';
 import { useNavigate, useParams } from 'react-router-dom';
 import LaborGuideSearch from '../components/LaborGuideSearch';
 import { setupLaborGuide } from '../utils/setupLaborGuide';
+import { useInvoice } from "../context/InvoiceContext";
 
 export default function InvoiceScreen({ isEditing }) {
-  const { invoice, setInvoice, clearInvoice } = useContext(JobLogContext);
+  const { setInvoice: setJobLogInvoice } = useContext(JobLogContext);
+  const { updateInvoice, createInvoice } = useInvoice();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id: invoiceId } = useParams(); // Get invoice ID from URL if editing
@@ -36,22 +38,22 @@ export default function InvoiceScreen({ isEditing }) {
   const [existingInvoice, setExistingInvoice] = useState(null);
   
   // Generate a random alphanumeric string of specified length
-  const generateRandomAlphanumeric = (length = 6) => {
+  const generateRandomAlphanumeric = useCallback((length = 6) => {
     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let result = '';
     for (let i = 0; i < length; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
-  };
+  }, []);
   
   // Generate invoice number based on PO number or random digits
-  const generateInvoiceNumber = () => {
+  const generateInvoiceNumber = useCallback(() => {
     // Use the PO number if provided, otherwise generate a random number
     const poBase = invoiceData.poNumber.trim() || Math.floor(100000 + Math.random() * 900000).toString();
     const randomSuffix = generateRandomAlphanumeric();
     return `INV-${poBase}-${randomSuffix}`;
-  };
+  }, [invoiceData.poNumber, generateRandomAlphanumeric]);
   
   // Add user settings state
   const [userSettings, setUserSettings] = useState({
@@ -182,7 +184,7 @@ export default function InvoiceScreen({ isEditing }) {
     };
     
     fetchData();
-  }, [user, isEditing, invoiceId, navigate]);
+  }, [user, isEditing, invoiceId, navigate, generateInvoiceNumber, invoiceData, userSettings.businessInfo, userSettings.preferences]);
   
   // Update invoice number when PO number changes
   useEffect(() => {
@@ -193,7 +195,7 @@ export default function InvoiceScreen({ isEditing }) {
         invoiceNumber: generateInvoiceNumber()
       }));
     }
-  }, [invoiceData.poNumber, isLoading]);
+  }, [invoiceData.poNumber, isLoading, generateInvoiceNumber]);
 
   const handleAddPart = () => {
     if (!newPart.name || !newPart.cost) {
@@ -325,7 +327,7 @@ export default function InvoiceScreen({ isEditing }) {
       };
       
       // Update context with saved invoice including ID
-      setInvoice(invoiceWithId);
+      setJobLogInvoice(invoiceWithId);
       
       // Navigate to invoice history
       navigate('/invoicehistory');

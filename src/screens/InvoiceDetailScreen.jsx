@@ -151,7 +151,7 @@ export default function InvoiceDetailScreen() {
     const element = document.getElementById('invoice-detail');
     const opt = {
       margin: [0.5, 0.5],
-      filename: `invoice-${invoice.poNumber || 'download'}.pdf`,
+      filename: `invoice-${ invoices.poNumber || 'download'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { 
         scale: 2,
@@ -244,18 +244,18 @@ export default function InvoiceDetailScreen() {
           <div className="flex flex-col md:flex-row justify-between gap-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                {invoice.title || 'Invoice'}
+                { invoices.title || 'Invoice'}
               </h1>
               <div className="space-y-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                   <FiFileText className="w-4 h-4" />
-                  <span>Invoice #: {invoice.poNumber || invoice.id || 'N/A'}</span>
+                  <span>Invoice #: { invoices.poNumber || invoice.id || 'N/A'}</span>
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                   <FiClock className="w-4 h-4" />
                   <span>Created: {formatDate(invoice.createdAt)}</span>
                 </p>
-                {invoice.dueDate && (
+                { invoices.dueDate && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                     <FiCalendar className="w-4 h-4" />
                     <span>Due Date: {formatDate(invoice.dueDate)}</span>
@@ -279,24 +279,24 @@ export default function InvoiceDetailScreen() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <FiUser className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-900 dark:text-white">{invoice.customer?.name}</span>
+                <span className="text-gray-900 dark:text-white">{ invoices.customer?.name}</span>
               </div>
-              {invoice.customer?.company && (
+              { invoices.customer?.company && (
                 <div className="flex items-center gap-2">
                   <FiBriefcase className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">{invoice.customer.company}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{ invoices.customer.company}</span>
                 </div>
               )}
-              {invoice.customer?.address && (
+              { invoices.customer?.address && (
                 <div className="flex items-center gap-2">
                   <FiMapPin className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">{invoice.customer.address}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{ invoices.customer.address}</span>
                 </div>
               )}
-              {invoice.customer?.email && (
+              { invoices.customer?.email && (
                 <div className="flex items-center gap-2">
                   <FiMail className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">{invoice.customer.email}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{ invoices.customer.email}</span>
                 </div>
               )}
             </div>
@@ -314,7 +314,7 @@ export default function InvoiceDetailScreen() {
                 </tr>
               </thead>
               <tbody>
-                {invoice.parts.map((part, index) => (
+                { invoices.parts.map((part, index) => (
                   <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
                     <td className="py-3 text-sm text-gray-900 dark:text-white">{part.name}</td>
                     <td className="py-3 text-sm text-right text-gray-900 dark:text-white">
@@ -353,10 +353,10 @@ export default function InvoiceDetailScreen() {
               </tfoot>
             </table>
           </div>          {/* Notes Section */}
-          {invoice.notes && (
+          { invoices.notes && (
             <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
               <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Notes:</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{invoice.notes}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{ invoices.notes}</p>
             </div>
           )}
 
@@ -376,7 +376,7 @@ export default function InvoiceDetailScreen() {
               Customer Payment History
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Payment history and reliability metrics for {invoice.customer?.name}
+              Payment history and reliability metrics for { invoices.customer?.name}
             </p>
           </div>
 
@@ -492,9 +492,9 @@ export default function InvoiceDetailScreen() {
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {customerPaymentHistory.map((invoice) => (
-                      <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                      <tr key={ invoices.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                          {invoice.poNumber || invoice.id.substring(0, 6)}
+                          { invoices.poNumber || invoice.id.substring(0, 6)}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {formatDate(invoice.createdAt)}
@@ -503,12 +503,12 @@ export default function InvoiceDetailScreen() {
                           {formatCurrency(invoice.total || 0)}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm">
-                          {invoice.paidAt ? (
+                          { invoices.paidAt ? (
                             <span className="text-gray-900 dark:text-white">
                               {formatDate(invoice.paidAt)} 
-                              {invoice.daysToPayment !== undefined && (
+                              { invoices.daysToPayment !== undefined && (
                                 <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                                  ({invoice.daysToPayment} days)
+                                  ({ invoices.daysToPayment} days)
                                 </span>
                               )}
                             </span>
@@ -517,22 +517,22 @@ export default function InvoiceDetailScreen() {
                           )}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm">
-                          {invoice.paymentStatus === 'on-time' && (
+                          { invoices.paymentStatus === 'on-time' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                               On time
                             </span>
                           )}
-                          {invoice.paymentStatus === 'late' && (
+                          { invoices.paymentStatus === 'late' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
                               Late
                             </span>
                           )}
-                          {invoice.paymentStatus === 'overdue' && (
+                          { invoices.paymentStatus === 'overdue' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
                               Overdue
                             </span>
                           )}
-                          {invoice.paymentStatus === 'pending' && (
+                          { invoices.paymentStatus === 'pending' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
                               Pending
                             </span>
@@ -551,7 +551,7 @@ export default function InvoiceDetailScreen() {
           </div>
           
           {/* This Invoice's Payment History */}
-          {invoice.paymentHistory && invoice.paymentHistory.length > 0 && (
+          { invoices.paymentHistory && invoice.paymentHistory.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center mb-3">
                 <FiChevronsUp className="mr-1" /> 
@@ -569,7 +569,7 @@ export default function InvoiceDetailScreen() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {invoice.paymentHistory.map((payment, idx) => (
+                    { invoices.paymentHistory.map((payment, idx) => (
                       <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750">
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                           {formatDate(payment.date?.toDate ? payment.date.toDate() : payment.date)}

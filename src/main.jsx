@@ -1,10 +1,25 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
-import './index.css';  // Global styles including Tailwind
+import "./index.css";
+import "@fontsource/inter/latin.css";
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+
+import { AuthProvider }    from "./context/AuthContext";
+import { InvoiceProvider } from "./context/InvoiceContext";
+import { ThemeProvider }   from "./context/ThemeContext";
+import { JobLogProvider } from "./context/JobLogContext";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <AuthProvider>
+        <InvoiceProvider>
+          <JobLogProvider>
+            <App />
+          </JobLogProvider>
+        </InvoiceProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

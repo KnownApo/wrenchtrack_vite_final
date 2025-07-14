@@ -146,8 +146,8 @@ export default function InvoiceHistoryScreen() {
   const handlePrintInvoice = (invoice) => {
     // Implement print logic using html2pdf or similar
     const element = document.createElement('div');
-    element.innerHTML = `<h1>Invoice #${invoice.invoiceNumber}</h1><p>Customer: ${invoice.customerName}</p><p>Total: $${invoice.totalAmount}</p>`;
-    html2pdf().from(element).save(`invoice_${invoice.id}.pdf`);
+    element.innerHTML = `<h1>Invoice #${ invoices.invoiceNumber}</h1><p>Customer: ${ invoices.customerName}</p><p>Total: $${ invoices.totalAmount}</p>`;
+    html2pdf().from(element).save(`invoice_${ invoices.id}.pdf`);
   };
 
   const handleRecordPayment = async () => {
@@ -226,12 +226,12 @@ export default function InvoiceHistoryScreen() {
           </thead>
           <tbody>
             {filteredInvoices.map((invoice) => (
-              <tr key={invoice.id}>
+              <tr key={ invoices.id}>
                 <td><input type="checkbox" checked={selectedInvoices.includes(invoice.id)} onChange={() => {/* toggle selection */}} /></td>
-                <td>{invoice.invoiceNumber || invoice.id}</td>
-                <td>{invoice.customerName}</td>
-                <td>${invoice.totalAmount?.toFixed(2)}</td>
-                <td>{invoice.status}</td>
+                <td>{ invoices.invoiceNumber || invoice.id}</td>
+                <td>{ invoices.customerName}</td>
+                <td>${ invoices.totalAmount?.toFixed(2)}</td>
+                <td>{ invoices.status}</td>
                 <td>{new Date(invoice.dueDate).toLocaleDateString()}</td>
                 <td>
                   <button onClick={() => handleViewInvoice(invoice)}><FaEye /></button>

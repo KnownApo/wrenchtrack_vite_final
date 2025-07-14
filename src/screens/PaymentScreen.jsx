@@ -201,8 +201,8 @@ export default function PaymentScreen() {
                 >
                   <option value="">Choose an invoice</option>
                   {invoices.map((invoice) => (
-                    <option key={invoice.id} value={invoice.id}>
-                      {invoice.poNumber || invoice.id} - Balance: {formatCurrency(invoice.balance)} ({invoice.customer?.name})
+                    <option key={ invoices.id} value={ invoices.id}>
+                      { invoices.poNumber || invoice.id} - Balance: {formatCurrency(invoice.balance)} ({ invoices.customer?.name})
                     </option>
                   ))}
                 </select>

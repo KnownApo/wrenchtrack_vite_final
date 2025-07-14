@@ -432,7 +432,7 @@ export default function CustomerHistoryScreen() {
                           <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Recent Invoices</h4>
                           <div className="space-y-2">
                             {summary.recentInvoices.map(invoice => (
-                              <div key={invoice.id} className="flex justify-between items-center text-sm">
+                              <div key={ invoices.id} className="flex justify-between items-center text-sm">
                                 <div className="text-gray-600 dark:text-gray-400">
                                   {formatDate(invoice.createdAt)}
                                 </div>
