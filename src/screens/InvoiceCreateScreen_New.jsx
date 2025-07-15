@@ -8,10 +8,9 @@ import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { 
   FaPlus, FaTrash, FaSave, FaArrowRight, FaArrowLeft, FaCheck, 
-  FaUser, FaFileAlt, FaCalculator, FaEye
+  FaUser, FaFileText, FaCalculator, FaEye
 } from 'react-icons/fa';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { generateInvoiceNumber } from '../utils/invoiceUtils';
 
 export default function InvoiceCreateScreen() {
   const { user } = useAuth();
@@ -25,7 +24,6 @@ export default function InvoiceCreateScreen() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [businessInfo, setBusinessInfo] = useState(null);
   const [parts, setParts] = useState([]);
   const [newPart, setNewPart] = useState({ name: '', cost: '', quantity: 1, description: '' });
   const [validationErrors, setValidationErrors] = useState({});
@@ -37,7 +35,7 @@ export default function InvoiceCreateScreen() {
     notes: '',
     taxRate: 0.1,
     poNumber: '',
-    invoiceNumber: 'GENERATING...',
+    invoiceNumber: `INV-${Date.now()}`,
     paymentTerms: 'Net 30',
     status: 'draft'
   });
@@ -45,7 +43,7 @@ export default function InvoiceCreateScreen() {
   // Step configuration
   const steps = [
     { id: 1, title: 'Customer', icon: FaUser, description: 'Select customer' },
-    { id: 2, title: 'Items', icon: FaFileAlt, description: 'Add parts & services' },
+    { id: 2, title: 'Items', icon: FaFileText, description: 'Add parts & services' },
     { id: 3, title: 'Details', icon: FaCalculator, description: 'Invoice details' },
     { id: 4, title: 'Review', icon: FaEye, description: 'Review & save' }
   ];
@@ -82,22 +80,12 @@ export default function InvoiceCreateScreen() {
     return Object.keys(errors).length === 0;
   };
 
-  // Generate linked invoice and PO numbers
-  const generateLinkedNumbers = useCallback(() => {
-    const invoiceNumberData = generateInvoiceNumber(businessInfo);
-    setInvoiceData(prev => ({
-      ...prev,
-      invoiceNumber: invoiceNumberData.fullNumber,
-      poNumber: invoiceNumberData.poNumber
-    }));
-    return invoiceNumberData;
-  }, [businessInfo]);
-
-  // Generate PO number (also regenerates invoice number to keep them linked)
-  const handleGeneratePONumber = () => {
-    generateLinkedNumbers();
-    toast.success('New linked invoice and PO numbers generated!');
-  };
+  // Generate invoice number
+  const generateInvoiceNumber = useCallback(() => {
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `INV-${timestamp}-${randomSuffix}`;
+  }, []);
 
   // Load existing invoice data for editing
   useEffect(() => {
@@ -131,18 +119,14 @@ export default function InvoiceCreateScreen() {
           const invoiceDoc = await getDoc(doc(db, 'users', user.uid, 'invoices', invoiceId));
           if (invoiceDoc.exists()) {
             const data = invoiceDoc.data();
-            const invoiceNumberData = data.invoiceNumber ? 
-              { fullNumber: data.invoiceNumber } : 
-              generateInvoiceNumber(businessInfo);
-            
             setInvoiceData({
               title: data.title || 'Service Invoice',
               date: data.date || new Date().toISOString().split('T')[0],
               dueDate: data.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
               notes: data.notes || '',
               taxRate: data.taxRate || 0.1,
-              poNumber: data.poNumber || invoiceNumberData.poNumber || '',
-              invoiceNumber: invoiceNumberData.fullNumber,
+              poNumber: data.poNumber || '',
+              invoiceNumber: data.invoiceNumber || generateInvoiceNumber(),
               paymentTerms: data.paymentTerms || 'Net 30',
               status: data.status || 'draft'
             });
@@ -158,8 +142,11 @@ export default function InvoiceCreateScreen() {
             navigate('/invoices');
           }
         } else {
-          // New invoice - generate linked numbers
-          generateLinkedNumbers();
+          // New invoice
+          setInvoiceData(prev => ({
+            ...prev,
+            invoiceNumber: generateInvoiceNumber()
+          }));
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -170,26 +157,7 @@ export default function InvoiceCreateScreen() {
     };
 
     loadData();
-  }, [user, isEditing, invoiceId, navigate, location.state, customers, businessInfo, generateLinkedNumbers]);
-
-  // Load business info
-  const loadBusinessInfo = useCallback(async () => {
-    try {
-      const settingsDoc = await getDoc(doc(db, 'users', user.uid, 'settings', 'userSettings'));
-      if (settingsDoc.exists()) {
-        setBusinessInfo(settingsDoc.data());
-      }
-    } catch (error) {
-      console.error('Error loading business info:', error);
-    }
-  }, [user.uid]);
-
-  // Load business info
-  useEffect(() => {
-    if (user) {
-      loadBusinessInfo();
-    }
-  }, [user, loadBusinessInfo]);
+  }, [user, isEditing, invoiceId, navigate, generateInvoiceNumber, location.state, customers]);
 
   // Part management
   const handleAddPart = () => {
@@ -643,22 +611,13 @@ export default function InvoiceCreateScreen() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     PO Number (Optional)
                   </label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={invoiceData.poNumber}
-                      onChange={(e) => setInvoiceData({...invoiceData, poNumber: e.target.value})}
-                      className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
-                      placeholder="Purchase Order Number"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleGeneratePONumber}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      Generate
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={invoiceData.poNumber}
+                    onChange={(e) => setInvoiceData({...invoiceData, poNumber: e.target.value})}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                    placeholder="Purchase Order Number"
+                  />
                 </div>
                 
                 <div>

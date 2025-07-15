@@ -45,3 +45,109 @@
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 0.7);
 }
+
+/* Professional Print Styles */
+@media print {
+  @page {
+    margin: 0.75in;
+    size: letter;
+  }
+  
+  body {
+    font-size: 12pt;
+    line-height: 1.4;
+    color: #000 !important;
+    background: white !important;
+  }
+  
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  .print\\:block {
+    display: block !important;
+  }
+  
+  .print\\:text-black {
+    color: #000 !important;
+  }
+  
+  .print\\:bg-white {
+    background-color: white !important;
+  }
+  
+  .print\\:bg-gray-100 {
+    background-color: #f3f4f6 !important;
+  }
+  
+  .print\\:bg-gray-200 {
+    background-color: #e5e7eb !important;
+  }
+  
+  .print\\:bg-blue-100 {
+    background-color: #dbeafe !important;
+  }
+  
+  .print\\:bg-green-200 {
+    background-color: #bbf7d0 !important;
+  }
+  
+  .print\\:bg-yellow-200 {
+    background-color: #fef3c7 !important;
+  }
+  
+  .print\\:border-black {
+    border-color: #000 !important;
+  }
+  
+  .print\\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  .print\\:rounded-none {
+    border-radius: 0 !important;
+  }
+  
+  .print\\:text-gray-600 {
+    color: #4b5563 !important;
+  }
+  
+  .print\\:text-green-800 {
+    color: #166534 !important;
+  }
+  
+  .print\\:text-yellow-800 {
+    color: #92400e !important;
+  }
+  
+  .print\\:text-gray-800 {
+    color: #1f2937 !important;
+  }
+  
+  .print\\:hover\\:bg-transparent:hover {
+    background-color: transparent !important;
+  }
+  
+  /* Ensure proper table borders for print */
+  table {
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #000 !important;
+    padding: 8px !important;
+  }
+  
+  /* Page break control */
+  .page-break-before {
+    page-break-before: always;
+  }
+  
+  .page-break-after {
+    page-break-after: always;
+  }
+  
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+}

@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { toast } from 'react-toastify';
+import { safeToDate } from '../utils/dateUtils';
 
 export const InvoiceContext = createContext();
 
@@ -31,12 +32,13 @@ export const InvoiceProvider = ({ children }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const docData = doc.data();
+        
         return {
           id: doc.id,
           ...docData,
-          createdAt: docData.createdAt?.toDate() || new Date(),
-          updatedAt: docData.updatedAt?.toDate() || new Date(),
-          dueDate: docData.dueDate || null,
+          createdAt: safeToDate(docData.createdAt),
+          updatedAt: safeToDate(docData.updatedAt),
+          dueDate: docData.dueDate ? safeToDate(docData.dueDate) : null,
           totalAmount: docData.totalAmount || docData.total || 0,
           customerName: docData.customer?.name || docData.customerName || 'Unknown',
         };

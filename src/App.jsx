@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
+import LoadingSpinner from "./components/LoadingSpinner";
 
 import HomeScreen          from "./screens/HomeScreen";
 import DashboardScreen     from "./screens/DashboardScreen";
@@ -9,6 +10,8 @@ import InvoiceDetailScreen from "./screens/InvoiceDetailScreen";
 import InvoiceCreateScreen from "./screens/InvoiceCreateScreen";
 import CustomersScreen     from "./screens/CustomersScreen";
 import CustomerProfileScreen from "./screens/CustomerProfileScreen";
+import UserProfileScreen   from "./screens/UserProfileScreen";
+import PaymentScreen       from "./screens/PaymentScreen";
 import VehiclesScreen      from "./screens/VehiclesScreen";
 import VehicleServiceRecordsScreen from "./screens/VehicleServiceRecordsScreen";
 import RecordsScreen       from "./screens/RecordsScreen";
@@ -19,6 +22,7 @@ import SettingsScreen      from "./screens/SettingsScreen";
 import LoginScreen         from "./screens/LoginScreen";
 import RegisterScreen      from "./screens/RegisterScreen";
 import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
+import VehicleInspectionScreen from "./screens/VehicleInspectionScreen";
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -43,6 +47,16 @@ function PublicRoute({ children }) {
 }
 
 export default function App() {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
   return (
     <Router>
       <Routes>
@@ -76,6 +90,8 @@ export default function App() {
           <Route path="invoices/:id" element={<InvoiceDetailScreen />} />
           <Route path="customers" element={<CustomersScreen />} />
           <Route path="customers/:id" element={<CustomerProfileScreen />} />
+          <Route path="user-profile" element={<UserProfileScreen />} />
+          <Route path="payment" element={<PaymentScreen />} />
           <Route path="vehicles" element={<VehiclesScreen />} />
           <Route path="vehicle-service-records" element={<VehicleServiceRecordsScreen />} />
           <Route path="records" element={<RecordsScreen />} />
@@ -83,6 +99,7 @@ export default function App() {
           <Route path="jobs" element={<JobTimerScreen />} />
           <Route path="analytics" element={<AnalyticsScreen />} />
           <Route path="settings" element={<SettingsScreen />} />
+          <Route path="inspection" element={<VehicleInspectionScreen />} />
         </Route>
 
         {/* Catch-all route */}

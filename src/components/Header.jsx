@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Menu, Bell, UserCircle, Search, LogOut, Settings, User, Building } from "lucide-react";
+import { Menu, UserCircle, Search, LogOut, Settings, User, Building } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import NotificationCenter from "./NotificationCenter";
 
 export default function Header({ toggleSidebar }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [notificationCount] = useState(0); // This could be connected to actual notifications
   const [businessInfo, setBusinessInfo] = useState(null);
 
   // Load business info
@@ -32,6 +32,16 @@ export default function Header({ toggleSidebar }) {
 
   const handleLogout = async () => {
     await logout();
+    setUserMenuOpen(false);
+  };
+
+  const handleProfileClick = () => {
+    window.location.href = '/user-profile';
+    setUserMenuOpen(false);
+  };
+
+  const handleSettingsClick = () => {
+    window.location.href = '/settings';
     setUserMenuOpen(false);
   };
 
@@ -99,15 +109,7 @@ export default function Header({ toggleSidebar }) {
         </button>
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-          <Bell size={20} />
-          {notificationCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-600
-                             text-white text-[10px] flex items-center justify-center">
-              {notificationCount}
-            </span>
-          )}
-        </button>
+        <NotificationCenter />
 
         {/* User Menu */}
         <div className="relative">
@@ -147,7 +149,7 @@ export default function Header({ toggleSidebar }) {
                 </div>
                 
                 <button
-                  onClick={() => setUserMenuOpen(false)}
+                  onClick={handleProfileClick}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <User size={16} />
@@ -155,7 +157,7 @@ export default function Header({ toggleSidebar }) {
                 </button>
                 
                 <button
-                  onClick={() => setUserMenuOpen(false)}
+                  onClick={handleSettingsClick}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <Settings size={16} />

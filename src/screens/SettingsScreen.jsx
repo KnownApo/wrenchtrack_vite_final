@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 import firebaseService from '../services/firebaseService';
+import BusinessInfo from '../components/BusinessInfo';
 
 export default function SettingsScreen() {
   const { user } = useAuth();
@@ -86,6 +87,10 @@ export default function SettingsScreen() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <BusinessInfo mode="edit" />
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
             <FaUser className="mr-2" /> General
           </h2>
@@ -113,7 +118,7 @@ export default function SettingsScreen() {
           <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
             <FaBell className="mr-2" /> Notifications
           </h2>
-          <div className="space-y-4">
+          <div className="space-y-2">
             <label className="flex items-center">
               <input name="notifications" type="checkbox" checked={settings.notifications} onChange={handleInputChange} className="mr-2" />
               Enable Notifications

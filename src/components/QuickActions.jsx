@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiFileText, FiUser, FiTool, FiBarChart2, FiSettings } from 'react-icons/fi';
+import { FiFileText, FiUser, FiTool, FiBarChart2, FiSettings, FiShield } from 'react-icons/fi';
 
 const quickActions = [
   { 
@@ -10,6 +10,14 @@ const quickActions = [
     path: '/invoices/create',
     description: 'Create a new invoice for a customer',
     color: 'bg-blue-500 hover:bg-blue-600'
+  },
+  { 
+    id: 'vehicle-inspection', 
+    label: 'Vehicle Inspection', 
+    icon: <FiShield />, 
+    path: '/inspection',
+    description: 'Perform comprehensive vehicle safety inspection',
+    color: 'bg-red-500 hover:bg-red-600'
   },
   { 
     id: 'add-customer', 

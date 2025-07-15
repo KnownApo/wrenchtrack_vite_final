@@ -31,11 +31,27 @@ export const CustomerProvider = ({ children }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => {
         const docData = doc.data();
+        
+        // Helper function to safely convert timestamps
+        const safeToDate = (timestamp) => {
+          if (!timestamp) return new Date();
+          if (typeof timestamp?.toDate === 'function') {
+            return timestamp.toDate();
+          }
+          if (timestamp instanceof Date) {
+            return timestamp;
+          }
+          if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+            return new Date(timestamp);
+          }
+          return new Date();
+        };
+        
         return {
           id: doc.id,
           ...docData,
-          createdAt: docData.createdAt?.toDate() || new Date(),
-          updatedAt: docData.updatedAt?.toDate() || new Date(),
+          createdAt: safeToDate(docData.createdAt),
+          updatedAt: safeToDate(docData.updatedAt),
         };
       });
       
