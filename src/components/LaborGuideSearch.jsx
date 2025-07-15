@@ -10,7 +10,17 @@ export default function LaborGuideSearch({ onSelectOperation }) {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(''); // Add success message state
   const { user } = useAuth();
+useEffect(() => {
+  if (operations.length === 0 && !searchTerm) {
+    const samples = localLaborGuide.getAllOperations();  // From laborGuideDebugger
+    setOperations(samples);
+  }
+}, [operations, searchTerm]);
 
+// In return, after results:
+{operations.length > 10 && (
+  <button onClick={() => {/* Implement pagination */}} className="text-blue-600">Load More</button>
+)}
   console.log('LaborGuideSearch component initialized - Using local storage');
 
   // Load all operations on component mount
@@ -212,7 +222,7 @@ export default function LaborGuideSearch({ onSelectOperation }) {
           ) : (
             <div className="text-center py-4 text-gray-500">
               <p>No labor guide operations found</p>
-              <p className="mt-2 text-sm">Click "Reset to Default" to add sample operations</p>
+              <p className="mt-2 text-sm">Click &quot;Reset to Default&quot; to add sample operations</p>
             </div>
           )}
         </div>

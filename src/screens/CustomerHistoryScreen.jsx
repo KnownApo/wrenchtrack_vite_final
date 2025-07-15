@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useCustomers } from '../context/CustomerContext';
+import { useInvoice } from '../context/InvoiceContext';
 import { FiUser, FiMail, FiPhone, FiMapPin, FiEdit2, FiTrash2, FiSearch, FiClock, FiDollarSign, FiFileText, FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import debounce from 'lodash/debounce';
+import LoadingSpinner from '../components/LoadingSpinner';
+import ErrorMessage from '../components/ErrorMessage';
 
 export default function CustomerHistoryScreen() {
-  const { user } = useAuth();
-  const [customers, setCustomers] = useState([]);
+  const navigate = useNavigate();
+  const { customers, loading: customersLoading, error: customersError, updateCustomer, deleteCustomer } = useCustomers();
+  const { invoices, loading: invoicesLoading, error: invoicesError } = useInvoice();
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [editData, setEditData] = useState({
@@ -21,69 +24,44 @@ export default function CustomerHistoryScreen() {
     preferredContact: 'email',
     status: 'active'
   });
-  const [isLoading, setIsLoading] = useState(true);
-  const [customerInvoices, setCustomerInvoices] = useState({});
-  const [stats, setStats] = useState({
-    totalCustomers: 0,
-    totalInvoices: 0,
-    totalRevenue: 0
-  });
 
-  useEffect(() => {
-    if (!user) return;
+  const loading = customersLoading || invoicesLoading;
+  const error = customersError || invoicesError;
 
-    const fetchData = async () => {
-      try {
-        // Fetch customers
-        const customersRef = collection(db, 'users', user.uid, 'customers');
-        const snapshot = await getDocs(customersRef);
-        const customerList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setCustomers(customerList);
-        setFilteredCustomers(customerList);
+  // Initialize filtered customers when customers data changes
+  React.useEffect(() => {
+    if (customers) {
+      setFilteredCustomers(customers);
+    }
+  }, [customers]);
 
-        // Fetch invoices
-        const invoicesRef = collection(db, 'users', user.uid, 'invoices');
-        const invoicesSnapshot = await getDocs(query(invoicesRef, orderBy('createdAt', 'desc')));
-        const invoicesData = invoicesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate()
-        }));
+  // Customer analytics data
+  const { customerInvoices, stats } = useMemo(() => {
+    if (!customers || !invoices) return { customerInvoices: {}, stats: { totalCustomers: 0, totalInvoices: 0, totalRevenue: 0 } };
 
-        // Group invoices by customer
-        const invoicesByCustomer = {};
-        let totalRevenue = 0;
-        invoicesData.forEach(invoice => {
-          if (invoice.customer?.id) {
-            if (!invoicesByCustomer[invoice.customer.id]) {
-              invoicesByCustomer[invoice.customer.id] = [];
-            }
-            invoicesByCustomer[invoice.customer.id].push(invoice);
-            
-            // Calculate revenue
-            const invoiceTotal = invoice.parts?.reduce((sum, part) => 
-              sum + (parseFloat(part.price) || 0) * (parseFloat(part.quantity) || 1), 0) || 0;
-            totalRevenue += invoiceTotal;
-          }
-        });
+    // Group invoices by customer
+    const invoicesByCustomer = {};
+    let totalRevenue = 0;
+    
+    invoices.forEach(invoice => {
+      if (invoice.customer?.id) {
+        if (!invoicesByCustomer[invoice.customer.id]) {
+          invoicesByCustomer[invoice.customer.id] = [];
+        }
+        invoicesByCustomer[invoice.customer.id].push(invoice);
+        totalRevenue += invoice.totalAmount || 0;
+      }
+    });
 
-        setCustomerInvoices(invoicesByCustomer);
-        setStats({
-          totalCustomers: customerList.length,
-          totalInvoices: invoicesData.length,
-          totalRevenue: totalRevenue
-        });
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Failed to load customer history');
-        setIsLoading(false);
+    return {
+      customerInvoices: invoicesByCustomer,
+      stats: {
+        totalCustomers: customers.length,
+        totalInvoices: invoices.length,
+        totalRevenue: totalRevenue
       }
     };
-
-    fetchData();
-  }, [user]);
+  }, [customers, invoices]);
 
   const handleSearch = debounce((query) => {
     if (!query.trim()) {
@@ -112,19 +90,10 @@ export default function CustomerHistoryScreen() {
   };
 
   const saveEdit = async () => {
-    if (!editingCustomer || !user) return;
+    if (!editingCustomer) return;
 
     try {
-      const customerRef = doc(db, 'users', user.uid, 'customers', editingCustomer);
-      await updateDoc(customerRef, editData);
-
-      setCustomers(prev =>
-        prev.map(cust => (cust.id === editingCustomer ? { ...cust, ...editData } : cust))
-      );
-      setFilteredCustomers(prev =>
-        prev.map(cust => (cust.id === editingCustomer ? { ...cust, ...editData } : cust))
-      );
-
+      await updateCustomer(editingCustomer, editData);
       setEditingCustomer(null);
       setEditData({
         name: '',
@@ -136,7 +105,6 @@ export default function CustomerHistoryScreen() {
         preferredContact: 'email',
         status: 'active'
       });
-      
       toast.success('Customer updated successfully');
     } catch (error) {
       console.error('Error updating customer:', error);
@@ -144,16 +112,9 @@ export default function CustomerHistoryScreen() {
     }
   };
 
-  const deleteCustomer = async (id) => {
-    if (!user) return;
-
+  const handleDeleteCustomer = async (id) => {
     try {
-      const customerRef = doc(db, 'users', user.uid, 'customers', id);
-      await deleteDoc(customerRef);
-
-      setCustomers(prev => prev.filter(cust => cust.id !== id));
-      setFilteredCustomers(prev => prev.filter(cust => cust.id !== id));
-      
+      await deleteCustomer(id);
       toast.success('Customer deleted successfully');
     } catch (error) {
       console.error('Error deleting customer:', error);
@@ -193,11 +154,20 @@ export default function CustomerHistoryScreen() {
     };
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center min-h-96">
+        <LoadingSpinner size="lg" />
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <ErrorMessage 
+        message={error} 
+        onRetry={() => window.location.reload()}
+      />
     );
   }
 
@@ -355,7 +325,12 @@ export default function CustomerHistoryScreen() {
                             <FiUser className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                           </div>
                           <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white">{customer.name}</h3>
+                            <button
+                              onClick={() => navigate(`/customers/${customer.id}`)}
+                              className="font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                            >
+                              {customer.name}
+                            </button>
                             {customer.company && (
                               <p className="text-sm text-gray-500 dark:text-gray-400">{customer.company}</p>
                             )}
@@ -369,7 +344,7 @@ export default function CustomerHistoryScreen() {
                             <FiEdit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => deleteCustomer(customer.id)}
+                            onClick={() => handleDeleteCustomer(customer.id)}
                             className="p-2 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
                           >
                             <FiTrash2 className="w-4 h-4" />
@@ -432,7 +407,7 @@ export default function CustomerHistoryScreen() {
                           <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Recent Invoices</h4>
                           <div className="space-y-2">
                             {summary.recentInvoices.map(invoice => (
-                              <div key={ invoices.id} className="flex justify-between items-center text-sm">
+                              <div key={invoice.id} className="flex justify-between items-center text-sm">
                                 <div className="text-gray-600 dark:text-gray-400">
                                   {formatDate(invoice.createdAt)}
                                 </div>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '../firebase'; // Ensure this points to your Firebase configuration
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { toast } from 'react-toastify';
 
 const AuthContext = createContext();
 
@@ -51,7 +52,22 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const value = { user };
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to log out');
+    }
+  };
+
+  const value = { 
+    user, 
+    loading,
+    logout,
+    isAuthenticated: !!user 
+  };
 
   return (
     <AuthContext.Provider value={value}>

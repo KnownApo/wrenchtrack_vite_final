@@ -2,7 +2,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import {
   Home, FileText, Users, Truck, Settings,
-  BarChart2, Clock, Package
+  BarChart2, Clock, Package, Archive, Wrench
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -11,6 +11,8 @@ const links = [
   { to: "/invoices",  label: "Invoices",  icon: <FileText size={18} /> },
   { to: "/customers", label: "Customers", icon: <Users size={18} /> },
   { to: "/vehicles",  label: "Vehicles",  icon: <Truck size={18} /> },
+  { to: "/vehicle-service-records", label: "Service Records", icon: <Wrench size={18} /> },
+  { to: "/records",   label: "Records",   icon: <Archive size={18} /> },
   { to: "/parts",     label: "Parts",     icon: <Package size={18} /> },
   { to: "/jobs",      label: "Job Timer", icon: <Clock size={18} /> },
   { to: "/analytics", label: "Analytics", icon: <BarChart2 size={18} /> },

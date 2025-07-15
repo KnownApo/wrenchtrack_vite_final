@@ -1,21 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useCustomers } from '../context/CustomerContext';
 import { useVehicles } from '../context/VehicleContext';
-import { useInvoice } from '../context/InvoiceContext';
-import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiUser, FiTruck, FiDollarSign, FiClock, FiTool, FiFileText, FiDownload, FiPhone, FiMail, FiShoppingCart, FiAlertTriangle } from 'react-icons/fi';
+import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiUser, FiTruck, FiDollarSign, FiClock, FiTool, FiFileText, FiDownload, FiChevronRight, FiChevronDown } from 'react-icons/fi';
 import { formatCurrency } from '../utils/helpers/helpers';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import QuickServiceActions from '../components/QuickServiceActions';
-import MaintenanceScheduler from '../components/MaintenanceScheduler';
 
 export default function VehicleServiceRecordsScreen() {
-  const navigate = useNavigate();
   const { customers, loading: customersLoading, error: customersError } = useCustomers();
-  const { invoices } = useInvoice();
   const { 
     vehicles, 
     serviceRecords, 
@@ -33,7 +27,6 @@ export default function VehicleServiceRecordsScreen() {
   } = useVehicles();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [showVehicleForm, setShowVehicleForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -41,7 +34,7 @@ export default function VehicleServiceRecordsScreen() {
   const [editingService, setEditingService] = useState(null);
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [expandedCustomers, setExpandedCustomers] = useState(new Set());
   
   const [vehicleFormData, setVehicleFormData] = useState({
     year: '',
@@ -73,157 +66,21 @@ export default function VehicleServiceRecordsScreen() {
   const loading = customersLoading || vehiclesLoading;
   const error = customersError || vehiclesError;
 
-  // Get customer-specific analytics (moved to useMemo above)
-  const getCustomerAnalytics = (customerId) => {
-    const customerVehicles = getVehiclesByCustomer(customerId);
-    const customerServices = serviceRecords.filter(record => 
-      customerVehicles.some(vehicle => vehicle.id === record.vehicleId)
-    );
-    const customerInvoices = invoices.filter(invoice => 
-      invoice.customer?.id === customerId || invoice.customerId === customerId
-    );
-    
-    const totalSpent = customerServices.reduce((sum, record) => 
-      sum + (parseFloat(record.cost) || 0) + (parseFloat(record.laborCost) || 0), 0
-    );
-    
-    const lastService = customerServices.sort((a, b) => 
-      new Date(b.serviceDate) - new Date(a.serviceDate)
-    )[0];
-    
-    return {
-      totalVehicles: customerVehicles.length,
-      totalServices: customerServices.length,
-      totalSpent,
-      lastService: lastService ? new Date(lastService.serviceDate) : null,
-      averageServiceCost: customerServices.length > 0 ? totalSpent / customerServices.length : 0,
-      totalInvoices: customerInvoices.length,
-      unpaidInvoices: customerInvoices.filter(inv => !inv.paid).length
-    };
-  };
-
-  // Get vehicle-specific analytics
-  const getVehicleAnalytics = (vehicleId) => {
-    const vehicleServices = getServiceRecordsByVehicle(vehicleId);
-    const totalCost = vehicleServices.reduce((sum, record) => 
-      sum + (parseFloat(record.cost) || 0) + (parseFloat(record.laborCost) || 0), 0
-    );
-    
-    const lastService = vehicleServices[0];
-    const nextService = lastService?.nextServiceDate ? new Date(lastService.nextServiceDate) : null;
-    const isOverdue = nextService && nextService < new Date();
-    
-    return {
-      totalServices: vehicleServices.length,
-      totalCost,
-      averageCost: vehicleServices.length > 0 ? totalCost / vehicleServices.length : 0,
-      lastService: lastService ? new Date(lastService.serviceDate) : null,
-      nextService,
-      isOverdue,
-      lastMileage: lastService?.mileage || 0
-    };
-  };
-
-  // Quick invoice creation with pre-filled data
-  const createQuickInvoice = (customer, vehicle = null) => {
-    const vehicleServices = vehicle ? getServiceRecordsByVehicle(vehicle.id) : [];
-    const lastService = vehicleServices.length > 0 ? vehicleServices[0] : null;
-    
-    const invoiceData = {
-      customer: {
-        id: customer.id,
-        name: customer.name,
-        email: customer.email,
-        phone: customer.phone,
-        address: customer.address,
-        company: customer.company
-      },
-      vehicle: vehicle ? {
-        id: vehicle.id,
-        year: vehicle.year,
-        make: vehicle.make,
-        model: vehicle.model,
-        vin: vehicle.vin,
-        licensePlate: vehicle.licensePlate,
-        mileage: vehicle.mileage
-      } : null,
-      parts: lastService ? [
-        {
-          name: lastService.serviceType || 'Previous Service',
-          cost: parseFloat(lastService.cost) || 0,
-          quantity: 1
-        }
-      ] : [],
-      labor: lastService ? [
-        {
-          description: lastService.description || 'Service work',
-          cost: parseFloat(lastService.laborCost) || 0,
-          hours: 1
-        }
-      ] : [],
-      notes: vehicle ? 
-        `Service for ${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.licensePlate ? ` (${vehicle.licensePlate})` : ''}${lastService ? `\n\nLast service: ${lastService.serviceType} on ${format(new Date(lastService.serviceDate), 'MMM d, yyyy')}` : ''}` : 
-        `Service for ${customer.name}`
-    };
-    
-    // Navigate to invoice creation with pre-filled data
-    navigate('/invoices/create', { state: { invoiceData } });
-  };
-
-  // Filter customers with enhanced search
+  // Filter customers based on search term
   const filteredCustomers = useMemo(() => {
     if (!customers) return [];
     
-    // Get customer-specific analytics
-    const getCustomerAnalytics = (customerId) => {
-      const customerVehicles = getVehiclesByCustomer(customerId);
-      const customerServices = serviceRecords.filter(record => 
-        customerVehicles.some(vehicle => vehicle.id === record.vehicleId)
-      );
-      const customerInvoices = invoices.filter(invoice => 
-        invoice.customer?.id === customerId || invoice.customerId === customerId
-      );
-      
-      const totalSpent = customerServices.reduce((sum, record) => 
-        sum + (parseFloat(record.cost) || 0) + (parseFloat(record.laborCost) || 0), 0
-      );
-      
-      const lastService = customerServices.sort((a, b) => 
-        new Date(b.serviceDate) - new Date(a.serviceDate)
-      )[0];
-      
-      return {
-        totalVehicles: customerVehicles.length,
-        totalServices: customerServices.length,
-        totalSpent,
-        lastService: lastService ? new Date(lastService.serviceDate) : null,
-        averageServiceCost: customerServices.length > 0 ? totalSpent / customerServices.length : 0,
-        totalInvoices: customerInvoices.length,
-        unpaidInvoices: customerInvoices.filter(inv => !inv.paid).length
-      };
-    };
-    
-    const filtered = customers.filter(customer => {
+    return customers.filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.phone?.includes(searchTerm);
+        customer.company?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      return matchesSearch;
+      // Only show customers who have vehicles
+      const hasVehicles = getVehiclesByCustomer(customer.id).length > 0;
+      
+      return matchesSearch && hasVehicles;
     });
-    
-    // Sort by recent activity
-    return filtered.sort((a, b) => {
-      const aAnalytics = getCustomerAnalytics(a.id);
-      const bAnalytics = getCustomerAnalytics(b.id);
-      
-      if (!aAnalytics.lastService && !bAnalytics.lastService) return 0;
-      if (!aAnalytics.lastService) return 1;
-      if (!bAnalytics.lastService) return -1;
-      
-      return bAnalytics.lastService - aAnalytics.lastService;
-    });
-  }, [customers, searchTerm, serviceRecords, invoices, getVehiclesByCustomer]);
+  }, [customers, searchTerm, getVehiclesByCustomer]);
 
   // Get analytics data
   const analyticsData = useMemo(() => {
@@ -417,6 +274,16 @@ export default function VehicleServiceRecordsScreen() {
     setShowServiceForm(false);
   };
 
+  const toggleCustomerExpansion = (customerId) => {
+    const newExpanded = new Set(expandedCustomers);
+    if (newExpanded.has(customerId)) {
+      newExpanded.delete(customerId);
+    } else {
+      newExpanded.add(customerId);
+    }
+    setExpandedCustomers(newExpanded);
+  };
+
   const exportServiceRecords = () => {
     if (!selectedVehicle || filteredServiceRecords.length === 0) {
       toast.info('No service records to export');
@@ -471,22 +338,15 @@ export default function VehicleServiceRecordsScreen() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Vehicle Service Records</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage customer vehicles and service history</p>
+          <p className="text-gray-600 dark:text-gray-400">Track vehicle maintenance and service history</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            {viewMode === 'grid' ? <FiFileText size={16} /> : <FiTruck size={16} />}
-            {viewMode === 'grid' ? 'List View' : 'Grid View'}
-          </button>
+        <div className="flex gap-3">
           <button
             onClick={() => {
-              setVehicleFormData(prev => ({ ...prev, customerId: selectedCustomer?.id || '' }));
+              setVehicleFormData(prev => ({ ...prev, customerId: '' }));
               setShowVehicleForm(true);
             }}
             className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
@@ -495,28 +355,16 @@ export default function VehicleServiceRecordsScreen() {
             Add Vehicle
           </button>
           {selectedVehicle && (
-            <>
-              <button
-                onClick={() => {
-                  setServiceFormData(prev => ({ ...prev, vehicleId: selectedVehicle.id }));
-                  setShowServiceForm(true);
-                }}
-                className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                <FiPlus size={16} />
-                Add Service
-              </button>
-              <button
-                onClick={() => {
-                  const customer = customers.find(c => c.id === selectedVehicle.customerId);
-                  if (customer) createQuickInvoice(customer, selectedVehicle);
-                }}
-                className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                <FiShoppingCart size={16} />
-                Quick Invoice
-              </button>
-            </>
+            <button
+              onClick={() => {
+                setServiceFormData(prev => ({ ...prev, vehicleId: selectedVehicle.id }));
+                setShowServiceForm(true);
+              }}
+              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              <FiPlus size={16} />
+              Add Service
+            </button>
           )}
         </div>
       </div>
@@ -632,493 +480,186 @@ export default function VehicleServiceRecordsScreen() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Customer List */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Customers</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Select a customer to view their vehicles
-              </p>
-            </div>
-            <div className="max-h-96 overflow-y-auto">
-              {filteredCustomers.length === 0 ? (
-                <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                  <FiUser className="mx-auto mb-4 text-gray-400" size={48} />
-                  <p>No customers found</p>
-                </div>
-              ) : (
-                filteredCustomers.map((customer) => {
-                  const analytics = getCustomerAnalytics(customer.id);
-                  const isSelected = selectedCustomer?.id === customer.id;
-                  
-                  return (
-                    <div
-                      key={customer.id}
-                      className={`p-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                        isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                      }`}
-                      onClick={() => setSelectedCustomer(customer)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mr-3">
-                            <FiUser className="text-blue-600 dark:text-blue-400" size={16} />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">{customer.name}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {analytics.totalVehicles} vehicles • {analytics.totalServices} services
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {formatCurrency(analytics.totalSpent)}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {analytics.lastService ? 
-                              `Last: ${format(analytics.lastService, 'MMM d')}` : 
-                              'No services'
-                            }
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {/* Customer actions */}
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            createQuickInvoice(customer);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors text-sm"
-                        >
-                          <FiShoppingCart size={12} />
-                          Invoice
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setVehicleFormData(prev => ({ ...prev, customerId: customer.id }));
-                            setShowVehicleForm(true);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors text-sm"
-                        >
-                          <FiPlus size={12} />
-                          Vehicle
-                        </button>
-                        {analytics.unpaidInvoices > 0 && (
-                          <span className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md text-xs">
-                            <FiAlertTriangle size={10} />
-                            {analytics.unpaidInvoices} unpaid
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Customer/Vehicle Navigation */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Customers & Vehicles</h3>
           </div>
-        </div>
-
-        {/* Vehicle Details */}
-        <div className="lg:col-span-2">
-          {!selectedCustomer ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
-              <FiUser className="mx-auto mb-4 text-gray-400" size={64} />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Select a Customer
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400">
-                Choose a customer from the list to view their vehicles and service records
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Customer Header */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      {selectedCustomer.name}
-                    </h3>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      {selectedCustomer.email && (
-                        <span className="flex items-center gap-1">
-                          <FiMail size={14} />
-                          {selectedCustomer.email}
-                        </span>
-                      )}
-                      {selectedCustomer.phone && (
-                        <span className="flex items-center gap-1">
-                          <FiPhone size={14} />
-                          {selectedCustomer.phone}
-                        </span>
-                      )}
-                      {selectedCustomer.company && (
-                        <span className="flex items-center gap-1">
-                          <FiUser size={14} />
-                          {selectedCustomer.company}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <button
-                      onClick={() => createQuickInvoice(selectedCustomer)}
-                      className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
-                    >
-                      Create Invoice
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Customer Stats */}
-                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="text-center">
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {(() => {
-                        const analytics = getCustomerAnalytics(selectedCustomer.id);
-                        return analytics.totalVehicles;
-                      })()}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Vehicles</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {(() => {
-                        const analytics = getCustomerAnalytics(selectedCustomer.id);
-                        return analytics.totalServices;
-                      })()}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Services</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {(() => {
-                        const analytics = getCustomerAnalytics(selectedCustomer.id);
-                        return formatCurrency(analytics.totalSpent);
-                      })()}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Spent</p>
-                  </div>
-                </div>
+          <div className="max-h-96 overflow-y-auto">
+            {filteredCustomers.length === 0 ? (
+              <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                <FiUser className="mx-auto mb-4 text-gray-400" size={48} />
+                <p>No customers with vehicles found</p>
               </div>
-
-              {/* Maintenance Scheduler */}
-              <div className="mt-6">
-                <MaintenanceScheduler customerId={selectedCustomer.id} />
-              </div>
-
-              {/* Customer Vehicles */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Vehicles</h3>
-                    <button
-                      onClick={() => {
-                        setVehicleFormData(prev => ({ ...prev, customerId: selectedCustomer.id }));
-                        setShowVehicleForm(true);
-                      }}
-                      className="flex items-center gap-2 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
-                    >
-                      <FiPlus size={14} />
-                      Add Vehicle
-                    </button>
-                  </div>
-                </div>
+            ) : (
+              filteredCustomers.map((customer) => {
+                const customerVehicles = getVehiclesByCustomer(customer.id);
+                const isExpanded = expandedCustomers.has(customer.id);
                 
-                {(() => {
-                  const customerVehicles = getVehiclesByCustomer(selectedCustomer.id);
-                  
-                  if (customerVehicles.length === 0) {
-                    return (
-                      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                        <FiTruck className="mx-auto mb-4 text-gray-400" size={48} />
-                        <p>No vehicles found for this customer</p>
-                        <button
-                          onClick={() => {
-                            setVehicleFormData(prev => ({ ...prev, customerId: selectedCustomer.id }));
-                            setShowVehicleForm(true);
-                          }}
-                          className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                        >
-                          Add First Vehicle
-                        </button>
+                return (
+                  <div key={customer.id} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                    <div
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                      onClick={() => toggleCustomerExpansion(customer.id)}
+                    >
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mr-3">
+                          <FiUser className="text-blue-600 dark:text-blue-400" size={16} />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{customer.name}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{customerVehicles.length} vehicles</p>
+                        </div>
                       </div>
-                    );
-                  }
-                  
-                  return (
-                    <div className="p-6 space-y-4">
-                      {customerVehicles.map((vehicle) => {
-                        const analytics = getVehicleAnalytics(vehicle.id);
-                        const isSelected = selectedVehicle?.id === vehicle.id;
-                        
-                        return (
+                      {isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+                    </div>
+                    
+                    {isExpanded && (
+                      <div className="pl-8 pb-4">
+                        {customerVehicles.map((vehicle) => (
                           <div
                             key={vehicle.id}
-                            className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors $"{
+                              selectedVehicle?.id === vehicle.id
+                                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                                : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                             }`}
                             onClick={() => setSelectedVehicle(vehicle)}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center">
-                                <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center mr-4">
-                                  <FiTruck className="text-green-600 dark:text-green-400" size={20} />
-                                </div>
-                                <div>
-                                  <h4 className="font-medium text-gray-900 dark:text-white">
-                                    {vehicle.year} {vehicle.make} {vehicle.model}
-                                  </h4>
-                                  <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-                                    {vehicle.licensePlate && (
-                                      <span>License: {vehicle.licensePlate}</span>
-                                    )}
-                                    {vehicle.color && (
-                                      <span>Color: {vehicle.color}</span>
-                                    )}
-                                    {vehicle.mileage && (
-                                      <span>Mileage: {vehicle.mileage.toLocaleString()}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="text-right">
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {analytics.totalServices} services
+                            <div className="flex items-center">
+                              <FiTruck className="text-gray-400 mr-3" size={16} />
+                              <div>
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  {vehicle.year} {vehicle.make} {vehicle.model}
                                 </p>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                  {formatCurrency(analytics.totalCost)} total
+                                  {vehicle.licensePlate || vehicle.vin}
                                 </p>
-                                {analytics.isOverdue && (
-                                  <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
-                                    <FiAlertTriangle size={10} />
-                                    Service overdue
-                                  </p>
-                                )}
                               </div>
                             </div>
-                            
-                            {/* Vehicle Actions */}
-                            <div className="flex gap-2 mt-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  createQuickInvoice(selectedCustomer, vehicle);
-                                }}
-                                className="flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors text-sm"
-                              >
-                                <FiShoppingCart size={12} />
-                                Invoice
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setServiceFormData(prev => ({ ...prev, vehicleId: vehicle.id }));
-                                  setShowServiceForm(true);
-                                }}
-                                className="flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-md hover:bg-green-200 dark:hover:bg-green-800 transition-colors text-sm"
-                              >
-                                <FiPlus size={12} />
-                                Service
-                              </button>
+                            <div className="flex gap-2">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleEditVehicle(vehicle);
                                 }}
-                                className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors text-sm"
+                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200"
                               >
-                                <FiEdit2 size={12} />
-                                Edit
+                                <FiEdit2 size={14} />
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteVehicle(vehicle.id);
                                 }}
-                                className="flex items-center gap-1 px-3 py-1 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors text-sm"
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200"
                               >
-                                <FiTrash2 size={12} />
-                                Delete
+                                <FiTrash2 size={14} />
                               </button>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Service Records Panel */}
-      {selectedVehicle && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Service Records - {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Complete maintenance and repair history
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setServiceFormData(prev => ({ ...prev, vehicleId: selectedVehicle.id }));
-                    setShowServiceForm(true);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
-                >
-                  <FiPlus size={16} />
-                  Add Service
-                </button>
-                <button
-                  onClick={exportServiceRecords}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <FiDownload size={16} />
-                  Export
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-6">
-            {/* Quick Service Actions */}
-            <div className="mb-6">
-              <QuickServiceActions 
-                vehicle={selectedVehicle}
-                onServiceSelect={(serviceData) => {
-                  setServiceFormData(serviceData);
-                  setShowServiceForm(true);
-                }}
-              />
-            </div>
-            
-            {filteredServiceRecords.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <FiTool className="mx-auto mb-4 text-gray-400" size={48} />
-                <p>No service records found</p>
-                <button
-                  onClick={() => {
-                    setServiceFormData(prev => ({ ...prev, vehicleId: selectedVehicle.id }));
-                    setShowServiceForm(true);
-                  }}
-                  className="mt-4 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
-                >
-                  Add First Service Record
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredServiceRecords.map((record) => (
-                  <div key={record.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                            <FiTool className="text-green-600 dark:text-green-400" size={16} />
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-gray-900 dark:text-white">
-                              {record.serviceType}
-                            </h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {format(new Date(record.serviceDate), 'MMM d, yyyy')}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          {record.mileage && (
-                            <div>
-                              <span className="font-medium text-gray-700 dark:text-gray-300">Mileage:</span>
-                              <p className="text-gray-600 dark:text-gray-400">{record.mileage.toLocaleString()}</p>
-                            </div>
-                          )}
-                          {record.technician && (
-                            <div>
-                              <span className="font-medium text-gray-700 dark:text-gray-300">Technician:</span>
-                              <p className="text-gray-600 dark:text-gray-400">{record.technician}</p>
-                            </div>
-                          )}
-                          {(record.cost || record.laborCost) && (
-                            <div>
-                              <span className="font-medium text-gray-700 dark:text-gray-300">Cost:</span>
-                              <p className="text-gray-600 dark:text-gray-400">
-                                {formatCurrency((parseFloat(record.cost) || 0) + (parseFloat(record.laborCost) || 0))}
-                              </p>
-                            </div>
-                          )}
-                          {record.nextServiceDate && (
-                            <div>
-                              <span className="font-medium text-gray-700 dark:text-gray-300">Next Service:</span>
-                              <p className="text-gray-600 dark:text-gray-400">
-                                {format(new Date(record.nextServiceDate), 'MMM d, yyyy')}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {record.description && (
-                          <div className="mt-3">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Description:</span>
-                            <p className="text-gray-600 dark:text-gray-400 mt-1">{record.description}</p>
-                          </div>
-                        )}
-                        
-                        {record.partsUsed && (
-                          <div className="mt-3">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Parts Used:</span>
-                            <p className="text-gray-600 dark:text-gray-400 mt-1">{record.partsUsed}</p>
-                          </div>
-                        )}
-                        
-                        {record.recommendations && (
-                          <div className="mt-3">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Recommendations:</span>
-                            <p className="text-gray-600 dark:text-gray-400 mt-1">{record.recommendations}</p>
-                          </div>
-                        )}
+                        ))}
                       </div>
-                      
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditService(record)}
-                          className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        >
-                          <FiEdit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteService(record.id)}
-                          className="p-2 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        >
-                          <FiTrash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                );
+              })
             )}
           </div>
         </div>
-      )}
+
+        {/* Service Records */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Service Records
+              {selectedVehicle && (
+                <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                  {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
+                </span>
+              )}
+            </h3>
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {!selectedVehicle ? (
+              <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                <FiTruck className="mx-auto mb-4 text-gray-400" size={48} />
+                <p>Select a vehicle to view service records</p>
+              </div>
+            ) : filteredServiceRecords.length === 0 ? (
+              <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                <FiFileText className="mx-auto mb-4 text-gray-400" size={48} />
+                <p>No service records found</p>
+                <p className="text-sm">Add a service record to get started</p>
+              </div>
+            ) : (
+              filteredServiceRecords.map((record) => (
+                <div key={record.id} className="p-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                          <FiTool className="text-green-600 dark:text-green-400" size={14} />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{record.serviceType}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {format(new Date(record.serviceDate), 'MMM d, yyyy')}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="ml-11 space-y-1">
+                        {record.mileage && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Mileage:</span> {record.mileage.toLocaleString()} miles
+                          </p>
+                        )}
+                        {record.technician && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Technician:</span> {record.technician}
+                          </p>
+                        )}
+                        {record.description && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Description:</span> {record.description}
+                          </p>
+                        )}
+                        {(record.cost || record.laborCost) && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Cost:</span> {formatCurrency((parseFloat(record.cost) || 0) + (parseFloat(record.laborCost) || 0))}
+                          </p>
+                        )}
+                        {record.recommendations && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Recommendations:</span> {record.recommendations}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditService(record)}
+                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200"
+                      >
+                        <FiEdit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteService(record.id)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200"
+                      >
+                        <FiTrash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Vehicle Form Modal */}
       {showVehicleForm && (

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import html2pdf from 'html2pdf.js';
-import { FiArrowLeft, FiDownload, FiClock, FiFileText, FiDollarSign, FiUser, FiMail, FiMapPin, FiBriefcase, FiCalendar, FiActivity, FiCheck, FiCreditCard, FiAlertTriangle, FiChevronsUp } from 'react-icons/fi';
+import { FiArrowLeft, FiDownload, FiClock, FiFileText, FiUser, FiMail, FiMapPin, FiBriefcase, FiCalendar, FiActivity, FiCheck, FiCreditCard, FiAlertTriangle, FiChevronsUp } from 'react-icons/fi';
 
 export default function InvoiceDetailScreen() {
   const { invoiceId } = useParams();
@@ -23,48 +23,9 @@ export default function InvoiceDetailScreen() {
     averageDaysToPayment: 0
   });
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  useEffect(() => {
-    const loadInvoice = async () => {
-      if (!user || !invoiceId) {
-        navigate('/invoicehistory');
-        return;
-      }
-      try {
-        const docRef = doc(db, 'users', user.uid, 'invoices', invoiceId);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const invoiceData = { 
-            ...data,
-            firestoreId: docSnap.id,
-            createdAt: data.createdAt?.toDate()
-          };
-          setInvoice(invoiceData);
-          
-          // If we have customer info, fetch their payment history
-          if (invoiceData.customer && invoiceData.customer.email) {
-            fetchCustomerPaymentHistory(invoiceData.customer.email);
-          } else {
-            setIsLoadingHistory(false);
-          }
-        } else {
-          toast.error('Invoice not found');
-          navigate('/invoicehistory');
-        }
-      } catch (err) {
-        console.error('Error loading invoice:', err);
-        toast.error('Failed to load invoice');
-        navigate('/invoicehistory');
-      }
-      setIsLoading(false);
-    };
 
-    loadInvoice();
-  }, [user, invoiceId, navigate]);
-  
   // Function to fetch the customer's payment history
-  const fetchCustomerPaymentHistory = async (customerEmail) => {
+  const fetchCustomerPaymentHistory = useCallback(async (customerEmail) => {
     if (!customerEmail || !user) {
       setIsLoadingHistory(false);
       return;
@@ -144,19 +105,68 @@ export default function InvoiceDetailScreen() {
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, [user, invoiceId]);
+
+  useEffect(() => {
+    const loadInvoice = async () => {
+      if (!user || !invoiceId) {
+        navigate('/invoices');
+        return;
+      }
+      try {
+        const docRef = doc(db, 'users', user.uid, 'invoices', invoiceId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const invoiceData = { 
+            ...data,
+            firestoreId: docSnap.id,
+            createdAt: data.createdAt?.toDate()
+          };
+          setInvoice(invoiceData);
+          
+          // If we have customer info, fetch their payment history
+          if (invoiceData.customer && invoiceData.customer.email) {
+            fetchCustomerPaymentHistory(invoiceData.customer.email);
+          } else {
+            setIsLoadingHistory(false);
+          }
+        } else {
+          toast.error('Invoice not found');
+          navigate('/invoices');
+        }
+      } catch (err) {
+        console.error('Error loading invoice:', err);
+        toast.error('Failed to load invoice');
+        navigate('/invoices');
+      }
+      setIsLoading(false);
+    };
+
+    loadInvoice();
+  }, [user, invoiceId, navigate, fetchCustomerPaymentHistory]);
 
   const handleDownloadPdf = async () => {
+    if (!invoice) return;
+    
     setIsPdfGenerating(true);
     const element = document.getElementById('invoice-detail');
+    
+    // Hide action buttons during PDF generation
+    const actionButtons = element.querySelectorAll('.pdf-hide');
+    actionButtons.forEach(btn => btn.style.display = 'none');
+    
     const opt = {
-      margin: [0.5, 0.5],
-      filename: `invoice-${ invoices.poNumber || 'download'}.pdf`,
+      margin: [0.5, 0.5, 0.5, 0.5],
+      filename: `Invoice-${invoice.invoiceNumber || invoice.id?.slice(0, 8) || 'download'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { 
         scale: 2,
         useCORS: true,
-        logging: false
+        logging: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
       },
       jsPDF: { 
         unit: 'in', 
@@ -172,8 +182,43 @@ export default function InvoiceDetailScreen() {
       console.error('PDF generation error:', error);
       toast.error('Failed to generate PDF');
     } finally {
+      // Show action buttons again
+      actionButtons.forEach(btn => btn.style.display = '');
       setIsPdfGenerating(false);
     }
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    const invoiceElement = document.getElementById('invoice-detail');
+    
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice ${invoice.invoiceNumber || invoice.id?.slice(0, 8)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .invoice-header { text-align: center; margin-bottom: 30px; }
+            .invoice-details { margin-bottom: 20px; }
+            .invoice-table { width: 100%; border-collapse: collapse; }
+            .invoice-table th, .invoice-table td { 
+              border: 1px solid #ddd; 
+              padding: 8px; 
+              text-align: left; 
+            }
+            .invoice-table th { background-color: #f5f5f5; }
+            .total-section { margin-top: 20px; text-align: right; }
+            .pdf-hide { display: none !important; }
+          </style>
+        </head>
+        <body>
+          ${invoiceElement.innerHTML}
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const formatCurrency = (amount) => {
@@ -222,20 +267,37 @@ export default function InvoiceDetailScreen() {
         {/* Header Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <button
-            onClick={() => navigate('/invoicehistory')}
+            onClick={() => navigate('/invoices')}
             className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <FiArrowLeft className="w-5 h-5" />
             <span>Back to Invoices</span>
           </button>
-          <button
-            onClick={handleDownloadPdf}
-            disabled={isPdfGenerating}
-            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FiDownload className="w-5 h-5" />
-            <span>{isPdfGenerating ? 'Generating PDF...' : 'Download PDF'}</span>
-          </button>
+          
+          <div className="flex items-center gap-3 pdf-hide">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            >
+              <FiFileText className="w-5 h-5" />
+              Print
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isPdfGenerating}
+              className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FiDownload className="w-5 h-5" />
+              <span>{isPdfGenerating ? 'Generating PDF...' : 'Download PDF'}</span>
+            </button>
+            <button
+              onClick={() => navigate(`/invoices/${invoiceId}/edit`)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+            >
+              <FiFileText className="w-5 h-5" />
+              Edit Invoice
+            </button>
+          </div>
         </div>
 
         {/* Invoice Detail Card */}
@@ -244,18 +306,18 @@ export default function InvoiceDetailScreen() {
           <div className="flex flex-col md:flex-row justify-between gap-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                { invoices.title || 'Invoice'}
+                { invoice.title || 'Invoice'}
               </h1>
               <div className="space-y-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                   <FiFileText className="w-4 h-4" />
-                  <span>Invoice #: { invoices.poNumber || invoice.id || 'N/A'}</span>
+                  <span>Invoice #: { invoice.poNumber || invoice.id || 'N/A'}</span>
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                   <FiClock className="w-4 h-4" />
                   <span>Created: {formatDate(invoice.createdAt)}</span>
                 </p>
-                { invoices.dueDate && (
+                { invoice.dueDate && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                     <FiCalendar className="w-4 h-4" />
                     <span>Due Date: {formatDate(invoice.dueDate)}</span>
@@ -279,24 +341,24 @@ export default function InvoiceDetailScreen() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <FiUser className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-900 dark:text-white">{ invoices.customer?.name}</span>
+                <span className="text-gray-900 dark:text-white">{ invoice.customer?.name}</span>
               </div>
-              { invoices.customer?.company && (
+              { invoice.customer?.company && (
                 <div className="flex items-center gap-2">
                   <FiBriefcase className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">{ invoices.customer.company}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{ invoice.customer.company}</span>
                 </div>
               )}
-              { invoices.customer?.address && (
+              { invoice.customer?.address && (
                 <div className="flex items-center gap-2">
                   <FiMapPin className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">{ invoices.customer.address}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{ invoice.customer.address}</span>
                 </div>
               )}
-              { invoices.customer?.email && (
+              { invoice.customer?.email && (
                 <div className="flex items-center gap-2">
                   <FiMail className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600 dark:text-gray-400">{ invoices.customer.email}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{ invoice.customer.email}</span>
                 </div>
               )}
             </div>
@@ -314,7 +376,7 @@ export default function InvoiceDetailScreen() {
                 </tr>
               </thead>
               <tbody>
-                { invoices.parts.map((part, index) => (
+                { invoice.parts.map((part, index) => (
                   <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
                     <td className="py-3 text-sm text-gray-900 dark:text-white">{part.name}</td>
                     <td className="py-3 text-sm text-right text-gray-900 dark:text-white">
@@ -353,10 +415,10 @@ export default function InvoiceDetailScreen() {
               </tfoot>
             </table>
           </div>          {/* Notes Section */}
-          { invoices.notes && (
+          { invoice.notes && (
             <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
               <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Notes:</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{ invoices.notes}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{ invoice.notes}</p>
             </div>
           )}
 
@@ -376,7 +438,7 @@ export default function InvoiceDetailScreen() {
               Customer Payment History
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Payment history and reliability metrics for { invoices.customer?.name}
+              Payment history and reliability metrics for { invoice.customer?.name}
             </p>
           </div>
 
@@ -492,9 +554,9 @@ export default function InvoiceDetailScreen() {
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {customerPaymentHistory.map((invoice) => (
-                      <tr key={ invoices.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                      <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                          { invoices.poNumber || invoice.id.substring(0, 6)}
+                          { invoice.poNumber || invoice.id.substring(0, 6)}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {formatDate(invoice.createdAt)}
@@ -503,12 +565,12 @@ export default function InvoiceDetailScreen() {
                           {formatCurrency(invoice.total || 0)}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm">
-                          { invoices.paidAt ? (
+                          { invoice.paidAt ? (
                             <span className="text-gray-900 dark:text-white">
                               {formatDate(invoice.paidAt)} 
-                              { invoices.daysToPayment !== undefined && (
+                              { invoice.daysToPayment !== undefined && (
                                 <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                                  ({ invoices.daysToPayment} days)
+                                  ({ invoice.daysToPayment} days)
                                 </span>
                               )}
                             </span>
@@ -517,22 +579,22 @@ export default function InvoiceDetailScreen() {
                           )}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm">
-                          { invoices.paymentStatus === 'on-time' && (
+                          { invoice.paymentStatus === 'on-time' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                               On time
                             </span>
                           )}
-                          { invoices.paymentStatus === 'late' && (
+                          { invoice.paymentStatus === 'late' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
                               Late
                             </span>
                           )}
-                          { invoices.paymentStatus === 'overdue' && (
+                          { invoice.paymentStatus === 'overdue' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
                               Overdue
                             </span>
                           )}
-                          { invoices.paymentStatus === 'pending' && (
+                          { invoice.paymentStatus === 'pending' && (
                             <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
                               Pending
                             </span>
@@ -551,7 +613,7 @@ export default function InvoiceDetailScreen() {
           </div>
           
           {/* This Invoice's Payment History */}
-          { invoices.paymentHistory && invoice.paymentHistory.length > 0 && (
+          { invoice.paymentHistory && invoice.paymentHistory.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center mb-3">
                 <FiChevronsUp className="mr-1" /> 
@@ -569,7 +631,7 @@ export default function InvoiceDetailScreen() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    { invoices.paymentHistory.map((payment, idx) => (
+                    { invoice.paymentHistory.map((payment, idx) => (
                       <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750">
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                           {formatDate(payment.date?.toDate ? payment.date.toDate() : payment.date)}

@@ -1,23 +1,20 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { db } from '../firebase';
-import { useAuth } from './AuthContext'; // Assuming this is the correct path; adjust if needed
+import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from './AuthContext';
 import { toast } from 'react-toastify';
 
-// Create the context
-const InvoiceContext = createContext();
+export const InvoiceContext = createContext();
 
-// Provider component
-export function InvoiceProvider({ children }) {
-  const { user } = useAuth();
+export const InvoiceProvider = ({ children }) => {
   const [invoices, setInvoices] = useState([]);
-  const [currentInvoice, setCurrentInvoice] = useState(null); // For in-progress editing
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
-  // Load invoices in real-time using onSnapshot
   useEffect(() => {
     if (!user) {
+      setInvoices([]);
       setLoading(false);
       return;
     }
@@ -25,178 +22,130 @@ export function InvoiceProvider({ children }) {
     setLoading(true);
     setError(null);
 
-    const invoicesRef = collection(db, 'users', user.uid, 'invoices');
-    const unsubscribe = onSnapshot(invoicesRef, (snapshot) => {
-      let invoiceList = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        invoiceList.push({
-          id: docSnap.id,
-          ...data,
-          paidAmount: typeof data.paidAmount !== 'undefined' ? parseFloat(data.paidAmount) : 0,
-          createdAt: data.createdAt?.toDate() || new Date(data.createdAt || Date.now()),
-          updatedAt: data.updatedAt?.toDate() || new Date(data.updatedAt || Date.now()),
-        });
-      });
+    // Query invoices for the current user
+    const q = query(
+      collection(db, 'users', user.uid, 'invoices'),
+      where('status', '!=', 'deleted') // Exclude deleted invoices
+    );
 
-      // Sort by updatedAt descending
-      invoiceList.sort((a, b) => b.updatedAt - a.updatedAt);
-      setInvoices(invoiceList);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const docData = doc.data();
+        return {
+          id: doc.id,
+          ...docData,
+          createdAt: docData.createdAt?.toDate() || new Date(),
+          updatedAt: docData.updatedAt?.toDate() || new Date(),
+          dueDate: docData.dueDate || null,
+          totalAmount: docData.totalAmount || docData.total || 0,
+          customerName: docData.customer?.name || docData.customerName || 'Unknown',
+        };
+      });
+      
+      // Sort by creation date (newest first)
+      data.sort((a, b) => b.createdAt - a.createdAt);
+      
+      setInvoices(data);
       setLoading(false);
     }, (err) => {
-      console.error('Error loading invoices:', err);
-      setError('Failed to load invoices in real-time.');
-      toast.error('Invoice sync failed. Please refresh.');
+      console.error('Error fetching invoices:', err);
+      setError(err.message);
       setLoading(false);
+      toast.error('Failed to load invoices');
     });
 
-    return unsubscribe; // Cleanup listener
+    return unsubscribe;
   }, [user]);
 
-  // Persist currentInvoice to localStorage for session recovery
-  useEffect(() => {
-    const saved = localStorage.getItem('currentInvoice');
-    if (saved) setCurrentInvoice(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
-    if (currentInvoice) {
-      localStorage.setItem('currentInvoice', JSON.stringify(currentInvoice));
-    } else {
-      localStorage.removeItem('currentInvoice');
-    }
-  }, [currentInvoice]);
-
-  // Create a new invoice
-  const createInvoice = useCallback(async (invoiceData) => {
+  const addInvoice = useCallback(async (invoice) => {
     if (!user) return;
+    
     try {
-      const invoicesRef = collection(db, 'users', user.uid, 'invoices');
-      const newDoc = await addDoc(invoicesRef, {
-        ...invoiceData,
-        items: invoiceData.items || [], // Ensure items array
+      const invoiceData = {
+        ...invoice,
+        userId: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        status: 'draft',
-      });
+        status: invoice.status || 'draft',
+      };
+      
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'invoices'), invoiceData);
       toast.success('Invoice created successfully');
-      setCurrentInvoice({ id: newDoc.id, ...invoiceData }); // Set as current
-      return newDoc.id;
+      return docRef.id;
     } catch (err) {
       console.error('Error creating invoice:', err);
+      setError(err.message);
       toast.error('Failed to create invoice');
+      throw err;
     }
   }, [user]);
 
-  // Update an existing invoice
-  const updateInvoice = useCallback(async (invoiceId, updates) => {
-    if (!user || !invoiceId) return;
+  const updateInvoice = useCallback(async (id, updates) => {
+    if (!user) return;
+    
     try {
-      const invoiceRef = doc(db, 'users', user.uid, 'invoices', invoiceId);
-      await updateDoc(invoiceRef, {
+      const updateData = {
         ...updates,
         updatedAt: serverTimestamp(),
-      });
+      };
+      
+      await updateDoc(doc(db, 'users', user.uid, 'invoices', id), updateData);
       toast.success('Invoice updated successfully');
-      if (currentInvoice?.id === invoiceId) {
-        setCurrentInvoice((prev) => ({ ...prev, ...updates }));
-      }
     } catch (err) {
       console.error('Error updating invoice:', err);
+      setError(err.message);
       toast.error('Failed to update invoice');
+      throw err;
     }
-  }, [user, currentInvoice]);
+  }, [user]);
 
-  // Delete an invoice (soft delete by updating status)
-  const deleteInvoice = useCallback(async (invoiceId) => {
-    if (!user || !invoiceId) return;
-    if (!window.confirm('Are you sure you want to delete this invoice?')) return;
+  const deleteInvoice = useCallback(async (id) => {
+    if (!user) return;
+    
     try {
-      await updateInvoice(invoiceId, { status: 'deleted', deletedAt: serverTimestamp() });
+      // Soft delete by updating status
+      await updateDoc(doc(db, 'users', user.uid, 'invoices', id), {
+        status: 'deleted',
+        deletedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       toast.success('Invoice deleted successfully');
-      if (currentInvoice?.id === invoiceId) setCurrentInvoice(null);
     } catch (err) {
       console.error('Error deleting invoice:', err);
+      setError(err.message);
       toast.error('Failed to delete invoice');
+      throw err;
     }
-  }, [user, updateInvoice, currentInvoice]);
+  }, [user]);
 
-  // Add item (e.g., part or labor) to invoice
-  const addItemToInvoice = useCallback(async (invoiceId, item) => {
-    if (!user || !invoiceId || !item) return;
-    try {
-      const invoice = invoices.find((inv) => inv.id === invoiceId) || currentInvoice;
-      if (!invoice) throw new Error('Invoice not found');
-      
-      const updatedItems = [...(invoice.items || []), {
-        ...item,
-        quantity: item.quantity || 1,
-        price: item.cost || item.price || 0,
-        total: (item.quantity || 1) * (item.cost || item.price || 0),
-      }];
+  const fetchInvoices = useCallback(() => {
+    // This is handled by the real-time listener, but kept for compatibility
+    if (!user) return;
+    // The onSnapshot listener handles real-time updates
+  }, [user]);
 
-      const updatedTotal = updatedItems.reduce((sum, it) => sum + it.total, 0);
-
-      await updateInvoice(invoiceId, {
-        items: updatedItems,
-        totalAmount: updatedTotal,
-      });
-
-      toast.success(`${item.name || 'Item'} added to invoice`);
-    } catch (err) {
-      console.error('Error adding item to invoice:', err);
-      toast.error('Failed to add item');
-    }
-  }, [user, invoices, currentInvoice, updateInvoice]);
-
-  // Remove item from invoice
-  const removeItemFromInvoice = useCallback(async (invoiceId, itemIndex) => {
-    if (!user || !invoiceId) return;
-    try {
-      const invoice = invoices.find((inv) => inv.id === invoiceId) || currentInvoice;
-      if (!invoice) throw new Error('Invoice not found');
-      
-      const updatedItems = invoice.items.filter((_, idx) => idx !== itemIndex);
-      const updatedTotal = updatedItems.reduce((sum, it) => sum + it.total, 0);
-
-      await updateInvoice(invoiceId, {
-        items: updatedItems,
-        totalAmount: updatedTotal,
-      });
-
-      toast.success('Item removed from invoice');
-    } catch (err) {
-      console.error('Error removing item:', err);
-      toast.error('Failed to remove item');
-    }
-  }, [user, invoices, currentInvoice, updateInvoice]);
-
-  // Memoized value to prevent re-renders
-  const value = useMemo(() => ({
-    invoices,
-    currentInvoice,
-    setCurrentInvoice,
-    loading,
-    error,
-    createInvoice,
-    updateInvoice,
-    deleteInvoice,
-    addItemToInvoice,
-    removeItemFromInvoice,
-  }), [invoices, currentInvoice, loading, error, createInvoice, updateInvoice, deleteInvoice, addItemToInvoice, removeItemFromInvoice]);
+  const value = { 
+    invoices, 
+    loading, 
+    error, 
+    addInvoice, 
+    updateInvoice, 
+    deleteInvoice, 
+    fetchInvoices,
+    setError, // Allow components to clear errors
+  };
 
   return (
     <InvoiceContext.Provider value={value}>
       {children}
     </InvoiceContext.Provider>
   );
-}
+};
 
-// Custom hook
-export function useInvoice() {
+export const useInvoice = () => {
   const context = useContext(InvoiceContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useInvoice must be used within an InvoiceProvider');
   }
   return context;
-}
+};
