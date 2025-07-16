@@ -6,7 +6,7 @@
 Built with **React 18, Vite, Firebase, Tailwind CSS & Chart.js**  
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](#-license)
-[![Build](https://img.shields.io/github/actions/workflow/status/yourusername/wrenchtrack/ci.yml?label=build)](https://github.com/yourusername/wrenchtrack/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/yourusername/wrenchtrack/ci.yml?label=build)]([npm-publish-github-packages.yml](https://github.com/KnownApo/wrenchtrack_vite_final/actions/workflows/npm-publish-github-packages.yml))
 [![Demo](https://img.shields.io/badge/demo-live-green?logo=vercel)](https://wrenchtrack.vercel.app)
 
 </div>
