@@ -1,12 +1,14 @@
 import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useInvoice } from '../context/InvoiceContext';
-import InvoiceDashboard from '../components/InvoiceDashboard';
+import ModernInvoiceDashboard from '../components/ModernInvoiceDashboard';
 import RecentActivity from '../components/RecentActivity';
 import QuickActions from '../components/QuickActions';
 import TestCustomerCreator from '../components/TestCustomerCreator';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { useAuth } from '../context/AuthContext';
+import { Sparkles, Coffee } from 'lucide-react';
 
 export default function DashboardScreen() {
   const { invoices, loading, error, setError } = useInvoice();
@@ -68,6 +70,18 @@ export default function DashboardScreen() {
       }));
   }, [invoices]);
 
+  // Get time-based greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const getUserName = () => {
+    return user?.displayName || user?.email?.split('@')[0] || 'User';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -87,28 +101,79 @@ export default function DashboardScreen() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Here&apos;s what&apos;s happening with your business today.
-        </p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <div className="space-y-8">
+        {/* Enhanced Welcome Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="card-glass relative overflow-hidden"
+        >
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10" />
+          
+          <div className="relative p-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-lg">
+                  <Sparkles className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                    {getGreeting()}, {getUserName()}!
+                  </h1>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Ready to tackle another productive day? Here&apos;s your business overview.
+                  </p>
+                </div>
+              </div>
+              
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3 }}
+                className="hidden lg:flex items-center gap-2 px-4 py-2 bg-white/20 dark:bg-gray-800/20 backdrop-blur-sm rounded-xl"
+              >
+                <Coffee className="w-5 h-5 text-amber-600" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {new Date().toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </span>
+              </motion.div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Modern Invoice Dashboard */}
+        <ModernInvoiceDashboard stats={stats} />
+
+        {/* Activity & Actions Grid */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="grid grid-cols-1 xl:grid-cols-2 gap-8"
+        >
+          <RecentActivity activities={recentActivities} />
+          <QuickActions />
+        </motion.div>
+
+        {/* Development Tools */}
+        {import.meta.env.DEV && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            <TestCustomerCreator />
+          </motion.div>
+        )}
       </div>
-
-      {/* Invoice Dashboard */}
-      <InvoiceDashboard stats={stats} />
-
-      {/* Recent Activity & Quick Actions */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <RecentActivity activities={recentActivities} />
-        <QuickActions />
-      </div>
-
-      {/* Test Customer Creator (development only) */}
-      {import.meta.env.DEV && <TestCustomerCreator />}
     </div>
   );
 }

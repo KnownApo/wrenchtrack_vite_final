@@ -1,134 +1,158 @@
 import React from 'react';
+import { motion } from 'framer-motion';
+import { Clock, DollarSign, FileText, User, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { FiFileText, FiDollarSign, FiClock, FiUser } from 'react-icons/fi';
-import { formatCurrency } from '../utils/helpers/helpers';
-
-const ActivityIcon = ({ type, status }) => {
-  const getIconAndColor = () => {
-    if (type === 'invoice') {
-      switch (status) {
-        case 'paid':
-          return { icon: <FiDollarSign size={16} />, color: 'text-green-500 bg-green-100 dark:bg-green-900' };
-        case 'pending':
-          return { icon: <FiClock size={16} />, color: 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900' };
-        case 'overdue':
-          return { icon: <FiFileText size={16} />, color: 'text-red-500 bg-red-100 dark:bg-red-900' };
-        default:
-          return { icon: <FiFileText size={16} />, color: 'text-blue-500 bg-blue-100 dark:bg-blue-900' };
-      }
-    }
-    return { icon: <FiUser size={16} />, color: 'text-gray-500 bg-gray-100 dark:bg-gray-700' };
-  };
-
-  const { icon, color } = getIconAndColor();
-  
-  return (
-    <div className={`p-2 rounded-full ${color}`}>
-      {icon}
-    </div>
-  );
-};
 
 export default function RecentActivity({ activities = [] }) {
   const navigate = useNavigate();
-  
-  const formatTimeAgo = (date) => {
-    const now = new Date();
-    const activityDate = new Date(date);
-    const diffMs = now - activityDate;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 30) return `${diffDays}d ago`;
-    return activityDate.toLocaleDateString();
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
+      case 'overdue':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800/20 dark:text-gray-400';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800/20 dark:text-gray-400';
+    }
   };
 
-  if (!activities || activities.length === 0) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Recent Activity
-        </h3>
-        <div className="text-center py-8">
-          <FiClock size={32} className="text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">No recent activity</p>
-          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-            Your recent invoices and activities will appear here
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'paid':
+        return '✓';
+      case 'pending':
+        return '⏳';
+      case 'overdue':
+        return '⚠️';
+      case 'draft':
+        return '📝';
+      default:
+        return '📄';
+    }
+  };
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'Unknown date';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) return 'Today';
+    if (diffDays === 2) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays} days ago`;
+    
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+  };
+
+  const formatAmount = (amount) => {
+    if (!amount) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const handleActivityClick = (activity) => {
+    if (activity.type === 'invoice' && activity.id) {
+      navigate(`/invoices/${activity.id}`);
+    }
+  };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Recent Activity
-      </h3>
-      
-      <div className="space-y-4">
-        {activities.map((activity, index) => (
-          <div key={activity.id || index} className="flex items-start gap-3">
-            <ActivityIcon type={activity.type} status={activity.status} />
-            
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {activity.type === 'invoice' && activity.customerId ? (
-                  <span>
-                    Invoice {activity.id?.slice(0, 8)} for{' '}
-                    <button
-                      onClick={() => navigate(`/customers/${activity.customerId}`)}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                    >
-                      {activity.customerName || 'Unknown Customer'}
-                    </button>
-                  </span>
-                ) : (
-                  activity.description || activity.title || 'Unknown activity'
-                )}
-              </p>
-              
-              <div className="flex items-center gap-2 mt-1">
-                {activity.amount && (
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {formatCurrency(activity.amount)}
-                  </span>
-                )}
-                
-                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                  activity.status === 'paid' 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                    : activity.status === 'pending'
-                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                    : activity.status === 'overdue'
-                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                }`}>
-                  {activity.status}
-                </span>
-              </div>
-            </div>
-            
-            <div className="text-right">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatTimeAgo(activity.timestamp || activity.time)}
-              </span>
-            </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.2 }}
+      className="card-glass"
+    >
+      <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+            <Clock className="w-5 h-5 text-white" />
           </div>
-        ))}
-      </div>
-      
-      {activities.length >= 5 && (
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 font-medium">
-            View all activity →
-          </button>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Recent Activity
+          </h3>
         </div>
-      )}
-    </div>
+      </div>
+
+      <div className="p-6">
+        {activities.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-8 h-8 text-gray-400" />
+            </div>
+            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              No recent activity
+            </h4>
+            <p className="text-gray-500 dark:text-gray-400">
+              Create your first invoice to see activity here
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {activities.map((activity, index) => (
+              <motion.div
+                key={activity.id || index}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
+                onClick={() => handleActivityClick(activity)}
+                className="group p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-medium text-white">
+                        {getStatusIcon(activity.status)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {activity.description}
+                        </p>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(activity.status)}`}>
+                          {activity.status}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          <span>{activity.customerName || 'Unknown Customer'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <DollarSign className="w-3 h-3" />
+                          <span>{formatAmount(activity.amount)}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          <span>{formatDate(activity.timestamp)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }

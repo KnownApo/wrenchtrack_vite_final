@@ -7,7 +7,7 @@ export default function AppShell({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       {/* Mobile overlay */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -29,10 +29,12 @@ export default function AppShell({ children }) {
       />
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header toggleSidebar={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8 bg-gray-50 dark:bg-gray-900">
-          {children}
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
         </main>
       </div>
     </div>

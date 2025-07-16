@@ -4,11 +4,12 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { useInvoice } from '../context/InvoiceContext';
 import { useCustomers } from '../context/CustomerContext';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
-import { FiTrendingUp, FiTrendingDown, FiDollarSign, FiUsers, FiFileText, FiCalendar, FiDownload } from 'react-icons/fi';
+import { TrendingUp, TrendingDown, DollarSign, Users, FileText, Calendar, Download, BarChart3, PieChart, Activity } from 'lucide-react';
 import { format, subMonths, isWithinInterval } from 'date-fns';
 import { formatCurrency } from '../utils/helpers/helpers';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import { motion } from 'framer-motion';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -224,254 +225,376 @@ export default function AnalyticsScreen() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <LoadingSpinner size="lg" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900 flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-400 text-lg">Loading analytics data...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <ErrorMessage 
-        message={error} 
-        onRetry={() => window.location.reload()}
-      />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <ErrorMessage 
+            message={error} 
+            onRetry={() => window.location.reload()}
+          />
+        </div>
+      </div>
     );
   }
 
   if (!analyticsData) {
     return (
-      <div className="text-center py-12">
-        <FiFileText className="mx-auto mb-4 text-gray-400" size={48} />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No data available</h3>
-        <p className="text-gray-600 dark:text-gray-400">Create some invoices to see analytics</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900 flex items-center justify-center">
+        <div className="text-center max-w-md mx-4">
+          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-gray-200/50 dark:border-gray-700/50">
+            <FileText className="mx-auto mb-4 text-gray-400" size={48} />
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No data available</h3>
+            <p className="text-gray-600 dark:text-gray-400">Create some invoices to see analytics</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Analytics</h1>
-          <p className="text-gray-600 dark:text-gray-400">Insights into your business performance</p>
-        </div>
-        <div className="flex gap-3">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="3months">Last 3 Months</option>
-            <option value="6months">Last 6 Months</option>
-            <option value="12months">Last 12 Months</option>
-          </select>
-          <button
-            onClick={exportReport}
-            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <FiDownload size={16} />
-            Export Report
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-purple-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="space-y-8"
+        >
+          {/* Header */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="text-center lg:text-left">
+              <h1 className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent mb-2">
+                Analytics Dashboard
+              </h1>
+              <p className="text-gray-600 dark:text-gray-300 text-lg">
+                Deep insights into your business performance
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                className="px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                <option value="3months">Last 3 Months</option>
+                <option value="6months">Last 6 Months</option>
+                <option value="12months">Last 12 Months</option>
+              </select>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={exportReport}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <Download size={18} />
+                Export Report
+              </motion.button>
+            </div>
+          </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Revenue</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{formatCurrency(analyticsData.totalRevenue)}</p>
-              <div className="flex items-center mt-1">
-                {analyticsData.revenueGrowth > 0 ? (
-                  <FiTrendingUp className="text-green-500 mr-1" size={14} />
-                ) : (
-                  <FiTrendingDown className="text-red-500 mr-1" size={14} />
-                )}
-                <span className={`text-sm ${analyticsData.revenueGrowth > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {analyticsData.revenueGrowth.toFixed(1)}%
-                </span>
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Revenue</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                    {formatCurrency(analyticsData.totalRevenue)}
+                  </p>
+                  <div className="flex items-center mt-1">
+                    {analyticsData.revenueGrowth > 0 ? (
+                      <TrendingUp className="text-green-500 mr-1" size={16} />
+                    ) : (
+                      <TrendingDown className="text-red-500 mr-1" size={16} />
+                    )}
+                    <span className={`text-sm font-medium ${analyticsData.revenueGrowth > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {analyticsData.revenueGrowth.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg">
+                  <DollarSign className="text-white" size={28} />
+                </div>
               </div>
-            </div>
-            <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-              <FiDollarSign className="text-blue-600 dark:text-blue-400" size={24} />
-            </div>
-          </div>
-        </div>
+            </motion.div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Invoices</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{analyticsData.totalInvoices}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Avg: {formatCurrency(analyticsData.avgInvoiceValue)}</p>
-            </div>
-            <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
-              <FiFileText className="text-green-600 dark:text-green-400" size={24} />
-            </div>
-          </div>
-        </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Invoices</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                    {analyticsData.totalInvoices}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Avg: {formatCurrency(analyticsData.avgInvoiceValue)}
+                  </p>
+                </div>
+                <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg">
+                  <FileText className="text-white" size={28} />
+                </div>
+              </div>
+            </motion.div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Customers</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{analyticsData.uniqueCustomers}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Collection: {analyticsData.collectionRate.toFixed(1)}%</p>
-            </div>
-            <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
-              <FiUsers className="text-purple-600 dark:text-purple-400" size={24} />
-            </div>
-          </div>
-        </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Customers</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                    {analyticsData.uniqueCustomers}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Collection: {analyticsData.collectionRate.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg">
+                  <Users className="text-white" size={28} />
+                </div>
+              </div>
+            </motion.div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Overdue Rate</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">{analyticsData.overdueRate.toFixed(1)}%</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{analyticsData.statusCounts.overdue} overdue</p>
-            </div>
-            <div className="p-3 bg-red-100 dark:bg-red-900 rounded-full">
-              <FiCalendar className="text-red-600 dark:text-red-400" size={24} />
-            </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Overdue Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                    {analyticsData.overdueRate.toFixed(1)}%
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {analyticsData.statusCounts.overdue} overdue
+                  </p>
+                </div>
+                <div className="p-4 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg">
+                  <Calendar className="text-white" size={28} />
+                </div>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Revenue Trend</h3>
-          <div className="h-64">
-            <Line 
-              data={chartData.revenue} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      callback: function(value) {
-                        return '$' + value.toLocaleString();
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Revenue Chart */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg">
+                  <BarChart3 className="text-white" size={20} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Revenue Trend</h3>
+              </div>
+              <div className="h-64">
+                <Line 
+                  data={chartData.revenue} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          callback: function(value) {
+                            return '$' + value.toLocaleString();
+                          }
+                        }
+                      }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
                       }
                     }
-                  }
-                },
-                plugins: {
-                  legend: {
-                    display: false
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Invoice Status Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Invoice Status</h3>
-          <div className="h-64">
-            <Doughnut 
-              data={chartData.status} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom'
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Monthly Invoices Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Monthly Invoices</h3>
-          <div className="h-64">
-            <Bar 
-              data={chartData.invoices} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      stepSize: 1
-                    }
-                  }
-                },
-                plugins: {
-                  legend: {
-                    display: false
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Customer Activity Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Customer Activity</h3>
-          <div className="h-64">
-            <Line 
-              data={chartData.customers} 
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      stepSize: 1
-                    }
-                  }
-                },
-                plugins: {
-                  legend: {
-                    display: false
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Top Customers */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Customers</h3>
-        <div className="space-y-3">
-          {analyticsData.topCustomers.map((customer, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <div className="flex items-center">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium mr-3">
-                  {customer.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <button
-                    onClick={() => navigate(`/customers/${customer.id}`)}
-                    className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors text-left"
-                  >
-                    {customer.name}
-                  </button>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{customer.invoices} invoices</p>
-                </div>
+                  }}
+                />
               </div>
-              <div className="text-right">
-                <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(customer.revenue)}</p>
+            </motion.div>
+
+            {/* Invoice Status Chart */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg">
+                  <PieChart className="text-white" size={20} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Invoice Status</h3>
               </div>
+              <div className="h-64">
+                <Doughnut 
+                  data={chartData.status} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'bottom'
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </motion.div>
+
+            {/* Monthly Invoices Chart */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.7 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-green-500 to-green-600 rounded-lg">
+                  <FileText className="text-white" size={20} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Monthly Invoices</h3>
+              </div>
+              <div className="h-64">
+                <Bar 
+                  data={chartData.invoices} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          stepSize: 1
+                        }
+                      }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </motion.div>
+
+            {/* Customer Activity Chart */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.8 }}
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg">
+                  <Activity className="text-white" size={20} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Customer Activity</h3>
+              </div>
+              <div className="h-64">
+                <Line 
+                  data={chartData.customers} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          stepSize: 1
+                        }
+                      }
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Top Customers */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.9 }}
+            className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg">
+                <Users className="text-white" size={20} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Top Customers</h3>
             </div>
-          ))}
-        </div>
+            <div className="space-y-4">
+              {analyticsData.topCustomers.map((customer, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 * index }}
+                  className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-xl hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg mr-4">
+                      {customer.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => navigate(`/customers/${customer.id}`)}
+                        className="font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors text-left"
+                      >
+                        {customer.name}
+                      </motion.button>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {customer.invoices} invoices
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-gray-900 dark:text-white text-lg">
+                      {formatCurrency(customer.revenue)}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </motion.div>
       </div>
     </div>
   );
